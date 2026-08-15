@@ -70,6 +70,24 @@
 
   .form-card{background:#FFFBF0;border:1px solid #E6D5A0;}
   .form-card h3{margin:0 0 4px;font-size:15px;}
+  .field-row-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .field-row-label label{margin:0;}
+  .scan-mat-btn{
+    display:flex;align-items:center;gap:5px;background:var(--teal-700);color:var(--white);
+    border:none;border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:600;
+    cursor:pointer;font-family:var(--font-ui);
+  }
+  .scan-mat-btn svg{stroke:var(--white);}
+  .mat-scan-overlay{
+    display:none;background:var(--teal-900);border-radius:var(--radius);overflow:hidden;
+    position:relative;margin-bottom:10px;
+  }
+  .mat-scan-overlay.open{display:block;}
+  #matReader{width:100%;}
+  .mat-scan-cancel{
+    display:block;width:100%;padding:10px;background:rgba(255,255,255,.08);color:#DDEEF2;
+    border:none;font-size:12.5px;cursor:pointer;font-family:var(--font-ui);
+  }
   .field{margin-top:10px;}
   .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;}
   .field select,.field input{width:100%;padding:11px 10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:15px;background:var(--white);}
@@ -298,7 +316,17 @@ function renderBin(data, message) {
   <div class="card form-card">
     <h3>Add Material</h3>
     <div class="field">
-      <label>Material</label>
+      <div class="field-row-label">
+        <label>Material</label>
+        <button type="button" class="scan-mat-btn" id="matScanBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
+          Scan
+        </button>
+      </div>
+      <div class="mat-scan-overlay" id="matScanOverlay">
+        <div id="matReader"></div>
+        <button type="button" class="mat-scan-cancel" id="matScanCancelBtn">Cancel scan</button>
+      </div>
       <select id="matSelect">
         <option value="">-- Select Material --</option>
         ${materialsCache.map(m => `<option value="${escapeHtml(m.code)}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('')}
@@ -338,6 +366,8 @@ function renderBin(data, message) {
   document.getElementById('btnIn').addEventListener('click', () => setTxType('IN'));
   document.getElementById('btnOut').addEventListener('click', () => setTxType('OUT'));
   document.getElementById('saveBtn').addEventListener('click', submitTransaction);
+  document.getElementById('matScanBtn').addEventListener('click', startMaterialScanner);
+  document.getElementById('matScanCancelBtn').addEventListener('click', stopMaterialScanner);
   document.getElementById('scanAnotherBtn').addEventListener('click', () => {
     resultArea.innerHTML = '';
     showChoiceScreen();
@@ -346,6 +376,42 @@ function renderBin(data, message) {
 
   const savedUser = localStorage.getItem('pmsd_user_name');
   if (savedUser) document.getElementById('userInput').value = savedUser;
+}
+
+let matQrCode = null;
+
+function startMaterialScanner() {
+  document.getElementById('matScanOverlay').classList.add('open');
+  matQrCode = new Html5Qrcode("matReader");
+  matQrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText) => {
+      let code = decodedText.trim();
+      try {
+        const u = new URL(decodedText);
+        if (u.searchParams.get('code')) code = u.searchParams.get('code');
+      } catch (e) { /* raw text, use as-is */ }
+
+      stopMaterialScanner();
+
+      const match = materialsCache.find(m => m.code.toLowerCase() === code.toLowerCase());
+      if (match) {
+        document.getElementById('matSelect').value = match.code;
+      } else {
+        resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">Scanned code "${escapeHtml(code)}" doesn't match any material in Material Master.</div>`);
+      }
+    },
+    () => {}
+  ).catch((err) => {
+    stopMaterialScanner();
+    resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">Camera couldn't start (${escapeHtml(String(err))}). Please allow camera access, or pick from the dropdown instead.</div>`);
+  });
+}
+
+function stopMaterialScanner() {
+  document.getElementById('matScanOverlay').classList.remove('open');
+  if (matQrCode) matQrCode.stop().then(() => matQrCode.clear()).catch(() => {});
 }
 
 function setTxType(t) {
