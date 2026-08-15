@@ -4,10 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#005266">
-<title>PMSD Store Intake — Bin Tracker</title>
+<title>PMSD WMS — Phase 1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
     --teal-900:#00343F; --teal-700:#005266; --teal-500:#0A7A94; --teal-100:#DFE7E1;
@@ -18,452 +17,513 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:var(--font-ui);background:var(--teal-100);color:var(--ink);-webkit-font-smoothing:antialiased;}
-  header{background:var(--teal-700);color:var(--white);padding:18px 20px 20px;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15);}
-  header .brand{display:flex;align-items:baseline;gap:8px;}
-  header .brand .mark{font-family:var(--font-code);font-weight:700;letter-spacing:.5px;background:var(--white);color:var(--teal-700);padding:2px 7px;border-radius:6px;font-size:12px;}
-  header h1{font-size:18px;margin:6px 0 2px;font-weight:600;}
-  header p{margin:0;font-size:12.5px;color:#C9E3EA;font-family:var(--font-code);}
-  main{max-width:520px;margin:0 auto;padding:16px 16px 60px;}
+  header{background:var(--teal-700);color:var(--white);padding:14px 18px;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15);display:flex;justify-content:space-between;align-items:center;}
+  header .brand{display:flex;align-items:center;gap:8px;}
+  header .brand .mark{font-family:var(--font-code);font-weight:700;background:var(--white);color:var(--teal-700);padding:2px 7px;border-radius:6px;font-size:12px;}
+  header .who{font-size:12px;color:#C9E3EA;}
+  header button{background:rgba(255,255,255,.12);color:var(--white);border:none;border-radius:6px;padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:var(--font-ui);}
 
-  .file-warning{background:#3A2A00;color:#FFE9B0;border-radius:var(--radius);padding:14px 16px;margin-top:14px;font-size:13px;line-height:1.5;}
-  .file-warning b{color:#FFD166;}
+  nav{display:flex;overflow-x:auto;background:var(--teal-900);padding:0 8px;}
+  nav button{background:none;border:none;color:#AFCBD2;padding:12px 14px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;font-family:var(--font-ui);border-bottom:3px solid transparent;}
+  nav button.active{color:var(--white);border-bottom-color:#4FD1E8;}
 
-  .scan-zone{background:var(--teal-900);border-radius:var(--radius);overflow:hidden;position:relative;margin-top:14px;}
-  #reader{width:100%;}
-  .scan-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px 20px;color:#AFCBD2;text-align:center;gap:14px;}
-  .choice-row{display:flex;gap:10px;width:100%;max-width:340px;}
-  .choice-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;border-radius:12px;border:none;cursor:pointer;font-family:var(--font-ui);font-weight:600;font-size:13.5px;}
-  .choice-btn.primary{background:var(--white);color:var(--teal-700);}
-  .choice-btn.secondary{background:rgba(255,255,255,.08);color:#DDEEF2;border:1.5px solid rgba(255,255,255,.35);}
-  .choice-btn:active{transform:scale(.97);}
-  .choice-btn svg{stroke:currentColor;}
-  .scan-line{position:absolute;left:6%;right:6%;height:2px;background:linear-gradient(90deg,transparent,#4FD1E8,transparent);box-shadow:0 0 8px #4FD1E8;animation:sweep 2.1s ease-in-out infinite;pointer-events:none;}
-  @keyframes sweep{0%{top:12%;opacity:0;}10%{opacity:1;}50%{top:85%;opacity:1;}90%{opacity:1;}100%{top:12%;opacity:0;}}
-
-  .manual-entry{display:none;flex-direction:column;align-items:center;gap:10px;padding:34px 20px;color:#AFCBD2;}
-  .manual-entry.open{display:flex;}
-  .manual-entry .row{display:flex;gap:8px;width:100%;max-width:280px;}
-  .manual-entry .row input{flex:1;padding:13px 14px;border-radius:8px;border:none;font-family:var(--font-code);font-size:16px;text-align:center;letter-spacing:.5px;}
-  .manual-entry .row button{background:var(--white);color:var(--teal-700);border:none;border-radius:8px;padding:0 18px;font-weight:700;cursor:pointer;font-family:var(--font-ui);}
-  .manual-entry .back-link{background:none;border:none;color:#AFCBD2;font-size:12.5px;text-decoration:underline;cursor:pointer;}
-
-  .card{background:var(--white);border-radius:var(--radius);padding:16px;margin-top:16px;border:1px solid var(--line);}
-  .bin-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-  .bin-head .id{font-family:var(--font-code);font-size:21px;font-weight:700;color:var(--teal-700);}
-  .status-chip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
-  .status-ACTIVE{background:var(--ok-bg);color:var(--ok);}
-  .status-EMPTY{background:var(--teal-100);color:var(--ink-soft);}
-  .status-UNDER,.status-DISABLED{background:var(--danger-bg);color:var(--danger);}
-  .meta-row{display:flex;gap:18px;margin-top:10px;font-size:12.5px;color:var(--ink-soft);}
-  .meta-row b{color:var(--ink);font-family:var(--font-code);}
-
-  .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:600;margin:22px 2px 8px;}
-  table{width:100%;border-collapse:collapse;font-size:13.5px;}
-  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);padding:6px 8px;border-bottom:1px solid var(--line);}
-  tbody td{padding:9px 8px;border-bottom:1px solid #EEF2F0;font-family:var(--font-code);}
-  tbody td.name{font-family:var(--font-ui);}
-  .bal-neg{color:var(--danger);font-weight:700;}
-  .bal-pos{color:var(--ok);font-weight:600;}
-  .type-IN{color:var(--ok);font-weight:600;}
-  .type-OUT{color:var(--warn);font-weight:600;}
-  .empty-row{padding:14px 8px;color:var(--ink-soft);font-size:13px;text-align:center;}
-
-  .form-card{background:#FFFBF0;border:1px solid #E6D5A0;}
-  .form-card h3{margin:0 0 4px;font-size:15px;}
-  .field-row-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
-  .field-row-label label{margin:0;}
-  .scan-mat-btn{
-    display:flex;align-items:center;gap:5px;background:var(--teal-700);color:var(--white);
-    border:none;border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:600;
-    cursor:pointer;font-family:var(--font-ui);
-  }
-  .scan-mat-btn svg{stroke:var(--white);}
-  .mat-scan-overlay{
-    display:none;background:var(--teal-900);border-radius:var(--radius);overflow:hidden;
-    position:relative;margin-bottom:10px;
-  }
-  .mat-scan-overlay.open{display:block;}
-  #matReader{width:100%;}
-  .mat-scan-cancel{
-    display:block;width:100%;padding:10px;background:rgba(255,255,255,.08);color:#DDEEF2;
-    border:none;font-size:12.5px;cursor:pointer;font-family:var(--font-ui);
-  }
-  .field{margin-top:10px;}
+  main{max-width:900px;margin:0 auto;padding:16px;padding-bottom:60px;}
+  .card{background:var(--white);border-radius:var(--radius);padding:16px;margin-top:14px;border:1px solid var(--line);}
+  .card h2{margin:0 0 12px;font-size:16px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:520px){.grid{grid-template-columns:1fr;}}
   .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;}
-  .field select,.field input{width:100%;padding:11px 10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:15px;background:var(--white);}
-  .type-toggle{display:flex;gap:8px;}
-  .type-toggle button{flex:1;padding:11px;border-radius:8px;border:1.5px solid var(--line);background:var(--white);font-weight:600;cursor:pointer;font-family:var(--font-ui);}
-  .type-toggle button.active-in{border-color:var(--ok);background:var(--ok-bg);color:var(--ok);}
-  .type-toggle button.active-out{border-color:var(--warn);background:var(--warn-bg);color:var(--warn);}
-  .submit-btn{width:100%;margin-top:14px;padding:13px;border:none;border-radius:8px;background:var(--teal-700);color:var(--white);font-weight:600;font-size:15px;cursor:pointer;}
-  .submit-btn:disabled{opacity:.6;}
+  .field select,.field input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:14.5px;background:var(--white);}
+  .btn{background:var(--teal-700);color:var(--white);border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;margin-top:12px;}
+  .btn.secondary{background:var(--teal-100);color:var(--teal-700);}
+  .btn.danger{background:var(--danger-bg);color:var(--danger);}
 
-  .msg{padding:11px 13px;border-radius:8px;font-size:13.5px;margin-top:16px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--ink-soft);padding:6px 8px;border-bottom:1px solid var(--line);}
+  tbody td{padding:8px;border-bottom:1px solid #EEF2F0;font-family:var(--font-code);}
+  tbody td.name{font-family:var(--font-ui);}
+  .chip{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
+  .chip.ok{background:var(--ok-bg);color:var(--ok);}
+  .chip.warn{background:var(--warn-bg);color:var(--warn);}
+  .chip.danger{background:var(--danger-bg);color:var(--danger);}
+  .chip.neutral{background:var(--teal-100);color:var(--ink-soft);}
+
+  .msg{padding:10px 13px;border-radius:8px;font-size:13.5px;margin-top:12px;}
   .msg.ok{background:var(--ok-bg);color:var(--ok);}
   .msg.err{background:var(--danger-bg);color:var(--danger);}
-  .loading{text-align:center;padding:30px;color:var(--ink-soft);font-size:13.5px;}
-  .spinner{width:22px;height:22px;border:3px solid var(--teal-100);border-top-color:var(--teal-700);border-radius:50%;margin:0 auto 10px;animation:spin .8s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .manual-toggle{text-align:center;margin-top:10px;}
+
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .login-card{background:var(--white);border-radius:14px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.15);}
+  .login-card h1{font-size:18px;margin:6px 0 2px;color:var(--teal-700);}
+  .login-card p{font-size:12.5px;color:var(--ink-soft);margin:0 0 18px;}
+  .hidden{display:none !important;}
+  .row-actions{display:flex;gap:8px;}
+  .lines-table input{width:100%;padding:6px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;}
+  .add-line-row{margin-top:8px;}
   footer{text-align:center;padding:20px;font-size:11.5px;color:var(--ink-soft);}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="brand"><span class="mark">PMSD</span><span style="font-size:12px;color:#C9E3EA;">Store Intake</span></div>
-  <h1>Bin / BOM Tracker</h1>
-  <p id="urlHint">connected to your sheet</p>
-</header>
-
-<main>
-  <div id="fileWarning"></div>
-
-  <div class="scan-zone" id="scanZone">
-    <div class="scan-placeholder" id="scanPlaceholder">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4FD1E8" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
-      <div id="choiceText" style="font-size:13px;margin-top:-4px;">How do you want to find the bin?</div>
-      <div class="choice-row" id="choiceRow">
-        <button class="choice-btn primary" id="startScanBtn">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
-          Scan QR Code
-        </button>
-        <button class="choice-btn secondary" id="manualToggleBtn">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 17h8"/></svg>
-          Enter Bin ID
-        </button>
-      </div>
-    </div>
-    <div class="manual-entry" id="manualForm">
-      <div style="font-size:13px;">Select or type the Bin ID</div>
-      <div class="row">
-        <input type="text" id="manualBinInput" list="binListOptions" placeholder="Tap to see all bins…" autocapitalize="characters" autocomplete="off">
-        <datalist id="binListOptions"></datalist>
-        <button id="manualGoBtn">Go</button>
-      </div>
-      <button class="back-link" id="manualBackBtn">‹ back</button>
-    </div>
-    <div id="reader" style="display:none;"></div>
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <span class="mark" style="font-family:var(--font-code);font-weight:700;background:var(--teal-700);color:var(--white);padding:2px 7px;border-radius:6px;font-size:12px;">PMSD</span>
+    <h1>Warehouse & Material System</h1>
+    <p>Sign in with your PMSD account</p>
+    <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@pmsd.com"></div>
+    <div class="field" style="margin-top:8px;"><label>Password</label><input type="password" id="loginPassword"></div>
+    <button class="btn" id="loginBtn" style="width:100%;">Sign In</button>
+    <button class="btn secondary" id="registerBtn" style="width:100%;">Create Account</button>
+    <div id="loginMsg"></div>
   </div>
+</div>
 
-  <div id="resultArea"></div>
-</main>
+<div id="appScreen" class="hidden">
+  <header>
+    <div class="brand"><span class="mark">PMSD</span><span style="font-size:13px;">Warehouse System</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="who" id="whoAmI"></span>
+      <button id="logoutBtn">Sign Out</button>
+    </div>
+  </header>
+  <nav id="navBar">
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="items">Item Master</button>
+    <button data-tab="locations">Locations</button>
+    <button data-tab="grn">GRN / Inward</button>
+    <button data-tab="qc">QC</button>
+    <button data-tab="stock">Stock Ledger</button>
+    <button data-tab="users">Users</button>
+  </nav>
+  <main id="mainArea"></main>
+</div>
 
-<footer>Scan → Sheet · PMSD Store Intake</footer>
+<footer>PMSD WMS · Phase 1 (Item Master, Location Master, GRN, QC, Stock Ledger)</footer>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc,
+  query, orderBy, limit, serverTimestamp, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
 // ====================================================================
-// CONFIG — your Apps Script Web App URL (from SETTINGS tab in the sheet)
+// PASTE YOUR FIREBASE CONFIG HERE (from Firebase console → Project settings)
 // ====================================================================
-const DEFAULT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzaY925YWcIqkWNdP6DgOue4TvvIWpKWTavsOyq0i8SK8UMPnHJTn_x9Mf5_IBK6b_c/exec";
-const WEBAPP_URL = localStorage.getItem("pmsd_webapp_url") || DEFAULT_WEBAPP_URL;
+const firebaseConfig = {
+  apiKey: "AIzaSyDkH-UzC7cdpfHu_j-FSHNJ5kXChzubdD8",
+  authDomain: "pmsd-wms.firebaseapp.com",
+  projectId: "pmsd-wms",
+  storageBucket: "pmsd-wms.firebasestorage.app",
+  messagingSenderId: "977169799353",
+  appId: "1:977169799353:web:b6fafd2d03c87ca22fe368",
+  measurementId: "G-9KDNB1HQJG"
+};
 
-// ---- DOM refs ----
-const resultArea = document.getElementById('resultArea');
-const scanPlaceholder = document.getElementById('scanPlaceholder');
-const choiceRow = document.getElementById('choiceRow');
-const choiceText = document.getElementById('choiceText');
-const readerEl = document.getElementById('reader');
-const startScanBtn = document.getElementById('startScanBtn');
-const manualToggleBtn = document.getElementById('manualToggleBtn');
-const manualForm = document.getElementById('manualForm');
-const manualBinInput = document.getElementById('manualBinInput');
-const manualGoBtn = document.getElementById('manualGoBtn');
-const manualBackBtn = document.getElementById('manualBackBtn');
-const fileWarning = document.getElementById('fileWarning');
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-let html5QrCode = null;
-let currentBinId = null;
-let materialsCache = null;
-let binsCache = null;
-let txType = 'IN';
+let currentUser = null;
+let currentRole = "PENDING";
+let itemsCache = [];
+let locationsCache = [];
 
-async function fetchBins() {
+// ---------------- Auth ----------------
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginMsg');
   try {
-    const res = await fetch(`${WEBAPP_URL}?action=bins&format=json`);
-    const data = await res.json();
-    return data.bins || [];
-  } catch (e) { return []; }
-}
-
-async function populateBinList() {
-  if (binsCache) return;
-  binsCache = await fetchBins();
-  const dl = document.getElementById('binListOptions');
-  dl.innerHTML = binsCache.map(b => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.id)} — ${escapeHtml(b.type || '')}</option>`).join('');
-}
-
-// ---- Warn clearly if opened as a local file (fetch will be blocked by the browser) ----
-if (location.protocol === 'file:') {
-  fileWarning.innerHTML = `<div class="file-warning">
-    <b>Heads up:</b> you opened this file directly from your phone/PC storage.
-    Browsers block network requests from local files for security, so the
-    "Couldn't reach the sheet" error is expected here — it is <b>not</b> a bug.<br><br>
-    Upload this file to <b>GitHub Pages</b> (or any https:// host) and open it from that
-    link — it will work normally there.
-  </div>`;
-}
-
-// ---- Choice screen wiring ----
-manualToggleBtn.addEventListener('click', () => showManualEntry());
-manualBackBtn.addEventListener('click', () => showChoiceScreen());
-manualGoBtn.addEventListener('click', () => {
-  const v = manualBinInput.value.trim();
-  if (v) loadBin(v);
+    await signInWithEmailAndPassword(auth, email, pw);
+  } catch (err) {
+    msg.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
 });
-manualBinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manualGoBtn.click(); });
-startScanBtn.addEventListener('click', startScanner);
 
-function showManualEntry() {
-  choiceRow.style.display = 'none';
-  choiceText.style.display = 'none';
-  manualForm.classList.add('open');
-  manualBinInput.focus();
-  populateBinList();
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginMsg');
+  if (!email || pw.length < 6) {
+    msg.innerHTML = `<div class="msg err">Enter an email and a password of at least 6 characters.</div>`;
+    return;
+  }
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pw);
+    await setDoc(doc(db, "users", cred.user.uid), {
+      email, role: "PENDING", status: "ACTIVE", createdAt: serverTimestamp()
+    });
+    msg.innerHTML = `<div class="msg ok">Account created. An Admin needs to assign your role in the Users tab before you get full access.</div>`;
+  } catch (err) {
+    msg.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    const udoc = await getDoc(doc(db, "users", user.uid));
+    currentRole = udoc.exists() ? udoc.data().role : "PENDING";
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('appScreen').classList.remove('hidden');
+    document.getElementById('whoAmI').textContent = `${user.email} · ${currentRole}`;
+    await preloadMasters();
+    renderTab('dashboard');
+  } else {
+    currentUser = null;
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('appScreen').classList.add('hidden');
+  }
+});
+
+// ---------------- Nav ----------------
+document.getElementById('navBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-tab]');
+  if (!btn) return;
+  document.querySelectorAll('#navBar button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTab(btn.dataset.tab);
+});
+
+async function preloadMasters() {
+  const itemsSnap = await getDocs(collection(db, "items"));
+  itemsCache = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const locSnap = await getDocs(collection(db, "locations"));
+  locationsCache = locSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-function showChoiceScreen() {
-  manualForm.classList.remove('open');
-  choiceRow.style.display = 'flex';
-  choiceText.style.display = 'block';
-  scanPlaceholder.style.display = 'flex';
-  readerEl.style.display = 'none';
+
+function renderTab(tab) {
+  const main = document.getElementById('mainArea');
+  if (tab === 'dashboard') return renderDashboard(main);
+  if (tab === 'items') return renderItems(main);
+  if (tab === 'locations') return renderLocations(main);
+  if (tab === 'grn') return renderGRN(main);
+  if (tab === 'qc') return renderQC(main);
+  if (tab === 'stock') return renderStock(main);
+  if (tab === 'users') return renderUsers(main);
 }
 
-// ---- QR scanning ----
-function startScanner() {
-  scanPlaceholder.style.display = 'none';
-  readerEl.style.display = 'block';
-  const scanLine = document.createElement('div');
-  scanLine.className = 'scan-line';
-  document.getElementById('scanZone').appendChild(scanLine);
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function fmtDate(ts) {
+  try {
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+  } catch (e) { return ''; }
+}
 
-  html5QrCode = new Html5Qrcode("reader");
-  html5QrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 230, height: 230 } },
-    (decodedText) => {
-      let binId = decodedText;
-      try {
-        const u = new URL(decodedText);
-        if (u.searchParams.get('bin')) binId = u.searchParams.get('bin');
-      } catch (e) { /* raw text, use as-is */ }
-      stopScanner();
-      loadBin(binId);
-    },
-    () => {}
-  ).catch((err) => {
-    scanLine.remove();
-    showChoiceScreen();
-    resultArea.innerHTML = `<div class="msg err">Camera couldn't start (${escapeHtml(String(err))}). Please allow camera access in your browser, or use "Enter Bin ID" instead.</div>`;
+// ---------------- Dashboard ----------------
+async function renderDashboard(main) {
+  main.innerHTML = `<div class="card"><h2>Dashboard</h2><div id="dashStats">Loading…</div></div>`;
+  const ledgerSnap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(10)));
+  const lowStock = await computeLowStock();
+
+  let html = `<div class="grid">
+    <div><b>${itemsCache.length}</b><br><span style="color:var(--ink-soft);font-size:12.5px;">Items in Master</span></div>
+    <div><b>${locationsCache.length}</b><br><span style="color:var(--ink-soft);font-size:12.5px;">Locations</span></div>
+  </div>
+  <h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Low / Critical Stock</h3>`;
+  html += lowStock.length === 0
+    ? `<p style="font-size:13px;color:var(--ink-soft);">Nothing below minimum stock right now.</p>`
+    : `<table><thead><tr><th>Item</th><th>Current</th><th>Min</th></tr></thead><tbody>
+        ${lowStock.map(x => `<tr><td class="name">${esc(x.itemName)}</td><td>${x.current}</td><td>${x.min}</td></tr>`).join('')}
+      </tbody></table>`;
+
+  html += `<h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Recent Activity</h3>`;
+  const rows = ledgerSnap.docs.map(d => d.data());
+  html += rows.length === 0
+    ? `<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>`
+    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td>${esc(r.txnType)}</td><td>${esc(r.itemCode)}</td><td>${r.qty}</td></tr>`).join('')}
+      </tbody></table>`;
+
+  document.getElementById('dashStats').innerHTML = html;
+}
+
+async function computeLowStock() {
+  const ledgerSnap = await getDocs(collection(db, "stockLedger"));
+  const totals = {};
+  ledgerSnap.docs.forEach(d => {
+    const r = d.data();
+    totals[r.itemCode] = (totals[r.itemCode] || 0) + (Number(r.qty) || 0);
+  });
+  return itemsCache
+    .filter(i => i.minStock && (totals[i.id] || 0) < Number(i.minStock))
+    .map(i => ({ itemName: i.itemName, current: totals[i.id] || 0, min: i.minStock }));
+}
+
+// ---------------- Item Master ----------------
+function renderItems(main) {
+  main.innerHTML = `
+  <div class="card">
+    <h2>Add Item</h2>
+    <div class="grid">
+      <div class="field"><label>Item Code</label><input id="itCode"></div>
+      <div class="field"><label>Item Name</label><input id="itName"></div>
+      <div class="field"><label>Category</label>
+        <select id="itCategory"><option>Raw Material</option><option>Component</option><option>Packing</option><option>Finished Goods</option></select>
+      </div>
+      <div class="field"><label>UOM</label><input id="itUOM" placeholder="PCS / Kg / Roll"></div>
+      <div class="field"><label>Min Stock</label><input id="itMin" type="number"></div>
+      <div class="field"><label>Max Stock</label><input id="itMax" type="number"></div>
+      <div class="field"><label>Batch Tracked?</label><select id="itBatch"><option value="N">No</option><option value="Y">Yes</option></select></div>
+      <div class="field"><label>Barcode</label><input id="itBarcode"></div>
+    </div>
+    <button class="btn" id="saveItemBtn">Save Item</button>
+    <div id="itemMsg"></div>
+  </div>
+  <div class="card"><h2>Item List (${itemsCache.length})</h2>
+    <table><thead><tr><th>Code</th><th>Name</th><th>UOM</th><th>Min</th><th>Status</th></tr></thead>
+    <tbody>${itemsCache.map(i => `<tr><td>${esc(i.id)}</td><td class="name">${esc(i.itemName)}</td><td>${esc(i.uom)}</td><td>${i.minStock ?? ''}</td><td><span class="chip ok">${esc(i.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
+  </div>`;
+
+  document.getElementById('saveItemBtn').addEventListener('click', async () => {
+    const code = document.getElementById('itCode').value.trim();
+    if (!code) { alert('Item Code is required.'); return; }
+    await setDoc(doc(db, "items", code), {
+      itemName: document.getElementById('itName').value.trim(),
+      category: document.getElementById('itCategory').value,
+      uom: document.getElementById('itUOM').value.trim(),
+      minStock: Number(document.getElementById('itMin').value) || 0,
+      maxStock: Number(document.getElementById('itMax').value) || 0,
+      batchTracked: document.getElementById('itBatch').value,
+      barcode: document.getElementById('itBarcode').value.trim(),
+      status: "ACTIVE"
+    });
+    await preloadMasters();
+    document.getElementById('itemMsg').innerHTML = `<div class="msg ok">Saved: ${esc(code)}</div>`;
+    renderItems(main);
   });
 }
-function stopScanner() {
-  if (html5QrCode) html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {});
-  const line = document.querySelector('.scan-line');
-  if (line) line.remove();
-  readerEl.style.display = 'none';
-  scanPlaceholder.style.display = 'flex';
+
+// ---------------- Location Master ----------------
+function renderLocations(main) {
+  main.innerHTML = `
+  <div class="card">
+    <h2>Add Location</h2>
+    <div class="grid">
+      <div class="field"><label>Location ID</label><input id="locId" placeholder="RM-A01-R2-P03"></div>
+      <div class="field"><label>Zone</label>
+        <select id="locZone"><option>RAW MATERIAL</option><option>WIP</option><option>FINISHED GOODS</option><option>QC-HOLD</option></select>
+      </div>
+      <div class="field"><label>Rack</label><input id="locRack"></div>
+      <div class="field"><label>Row</label><input id="locRow"></div>
+      <div class="field"><label>Position/Bin</label><input id="locPos"></div>
+      <div class="field"><label>Type</label>
+        <select id="locType"><option>STORAGE</option><option>QC-HOLD</option><option>TRANSFER-BIN</option><option>LINE-SIDE</option></select>
+      </div>
+    </div>
+    <button class="btn" id="saveLocBtn">Save Location</button>
+    <div id="locMsg"></div>
+  </div>
+  <div class="card"><h2>Locations (${locationsCache.length})</h2>
+    <table><thead><tr><th>ID</th><th>Zone</th><th>Type</th><th>Status</th></tr></thead>
+    <tbody>${locationsCache.map(l => `<tr><td>${esc(l.id)}</td><td class="name">${esc(l.zone)}</td><td>${esc(l.locationType)}</td><td><span class="chip ok">${esc(l.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
+  </div>`;
+
+  document.getElementById('saveLocBtn').addEventListener('click', async () => {
+    const id = document.getElementById('locId').value.trim();
+    if (!id) { alert('Location ID is required.'); return; }
+    await setDoc(doc(db, "locations", id), {
+      zone: document.getElementById('locZone').value,
+      rack: document.getElementById('locRack').value.trim(),
+      row: document.getElementById('locRow').value.trim(),
+      position: document.getElementById('locPos').value.trim(),
+      locationType: document.getElementById('locType').value,
+      status: "ACTIVE"
+    });
+    await preloadMasters();
+    document.getElementById('locMsg').innerHTML = `<div class="msg ok">Saved: ${esc(id)}</div>`;
+    renderLocations(main);
+  });
 }
 
-// ---- Data loading ----
-async function loadBin(binId) {
-  currentBinId = binId;
-  resultArea.innerHTML = `<div class="loading"><div class="spinner"></div>Loading ${escapeHtml(binId)}…</div>`;
-  try {
-    const res = await fetch(`${WEBAPP_URL}?bin=${encodeURIComponent(binId)}&format=json`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.error) {
-      resultArea.innerHTML = `<div class="msg err">${escapeHtml(data.error)}</div>`;
-      return;
-    }
-    if (!materialsCache) materialsCache = await fetchMaterials();
-    renderBin(data, "");
-  } catch (err) {
-    resultArea.innerHTML = `<div class="msg err">Couldn't reach the sheet (${escapeHtml(String(err.message || err))}). Check your internet connection, or confirm the Apps Script is deployed and the URL in this page's config is correct.</div>`;
+// ---------------- GRN ----------------
+let grnLines = [];
+
+function renderGRN(main) {
+  grnLines = [];
+  main.innerHTML = `
+  <div class="card">
+    <h2>New GRN (Material Inward)</h2>
+    <div class="grid">
+      <div class="field"><label>GRN No.</label><input id="grnNo" placeholder="auto if left blank"></div>
+      <div class="field"><label>PO Reference</label><input id="grnPO"></div>
+      <div class="field"><label>Vendor Name</label><input id="grnVendor"></div>
+      <div class="field"><label>GRN Date</label><input id="grnDate" type="date"></div>
+    </div>
+
+    <h3 style="margin-top:16px;font-size:13px;">Add Line Item</h3>
+    <div class="grid">
+      <div class="field"><label>Item</label>
+        <select id="grnItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Qty</label><input id="grnQty" type="number" min="1"></div>
+      <div class="field"><label>Batch No (if applicable)</label><input id="grnBatch"></div>
+    </div>
+    <button class="btn secondary" id="addLineBtn">+ Add Line</button>
+
+    <table class="lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Batch</th><th></th></tr></thead>
+    <tbody id="grnLinesBody"></tbody></table>
+
+    <button class="btn" id="saveGrnBtn">Create GRN</button>
+    <div id="grnMsg"></div>
+  </div>
+  <div class="card"><h2>Recent GRNs</h2><div id="grnList">Loading…</div></div>`;
+
+  document.getElementById('grnDate').value = new Date().toISOString().slice(0,10);
+
+  document.getElementById('addLineBtn').addEventListener('click', () => {
+    const code = document.getElementById('grnItemSel').value;
+    const qty = Number(document.getElementById('grnQty').value);
+    const batch = document.getElementById('grnBatch').value.trim();
+    if (!code || !qty) { alert('Select an item and enter a quantity.'); return; }
+    const item = itemsCache.find(i => i.id === code);
+    grnLines.push({ itemCode: code, itemName: item?.itemName || '', receivedQty: qty, batchNo: batch, qcStatus: 'PENDING' });
+    document.getElementById('grnQty').value = '';
+    document.getElementById('grnBatch').value = '';
+    renderGrnLines();
+  });
+
+  renderGrnLines();
+  loadRecentGRNs();
+
+  document.getElementById('saveGrnBtn').addEventListener('click', async () => {
+    if (grnLines.length === 0) { alert('Add at least one line item.'); return; }
+    const grnNo = document.getElementById('grnNo').value.trim() || ('GRN-' + Date.now());
+    await setDoc(doc(db, "grn", grnNo), {
+      poRef: document.getElementById('grnPO').value.trim(),
+      vendorName: document.getElementById('grnVendor').value.trim(),
+      grnDate: document.getElementById('grnDate').value,
+      status: 'PENDING QC',
+      createdBy: currentUser.email,
+      createdAt: serverTimestamp(),
+      lines: grnLines
+    });
+    document.getElementById('grnMsg').innerHTML = `<div class="msg ok">GRN created: ${esc(grnNo)}. Now goes to QC.</div>`;
+    grnLines = [];
+    renderGrnLines();
+    loadRecentGRNs();
+  });
+}
+
+function renderGrnLines() {
+  document.getElementById('grnLinesBody').innerHTML = grnLines.map((l, idx) => `
+    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.receivedQty}</td><td>${esc(l.batchNo)}</td>
+    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
+  `).join('') || '<tr><td colspan="4" style="color:var(--ink-soft);">No lines added yet.</td></tr>';
+  document.querySelectorAll('#grnLinesBody button[data-idx]').forEach(b => {
+    b.addEventListener('click', () => { grnLines.splice(Number(b.dataset.idx), 1); renderGrnLines(); });
+  });
+}
+
+async function loadRecentGRNs() {
+  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc"), limit(10)));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('grnList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No GRNs yet.</p>'
+    : `<table><thead><tr><th>GRN No</th><th>Vendor</th><th>Lines</th><th>Status</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.vendorName)}</td><td>${(r.lines||[]).length}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
+      </tbody></table>`;
+}
+
+// ---------------- QC ----------------
+async function renderQC(main) {
+  main.innerHTML = `<div class="card"><h2>Pending QC</h2><div id="qcList">Loading…</div></div>`;
+  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc")));
+  const pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => g.status === 'PENDING QC');
+
+  if (pending.length === 0) {
+    document.getElementById('qcList').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Nothing pending QC.</p>';
+    return;
   }
-}
-async function fetchMaterials() {
-  try {
-    const res = await fetch(`${WEBAPP_URL}?action=materials&format=json`);
-    const data = await res.json();
-    return data.materials || [];
-  } catch (e) { return []; }
-}
-
-// ---- Rendering ----
-function renderBin(data, message) {
-  const b = data.bin, stock = data.stock || [], hist = data.history || [];
-  const statusClass = 'status-' + (b.status || '').split(' ')[0].toUpperCase();
 
   let html = '';
-  if (message) html += `<div class="msg ok">${escapeHtml(message)}</div>`;
-
-  html += `
-  <div class="card">
-    <div class="bin-head">
-      <div class="id">${escapeHtml(b.id)}</div>
-      <span class="status-chip ${statusClass}">${escapeHtml(b.status || '')}</span>
-    </div>
-    <div class="meta-row">
-      <div>Type<br><b>${escapeHtml(b.type || '—')}</b></div>
-      <div>Rack<br><b>${escapeHtml(b.rack || '—')}</b></div>
-      <div>Level<br><b>${escapeHtml(b.level || '—')}</b></div>
-    </div>
-  </div>`;
-
-  html += `
-  <div class="card form-card">
-    <h3>Add Material</h3>
-    <div class="field">
-      <div class="field-row-label">
-        <label>Material</label>
-        <button type="button" class="scan-mat-btn" id="matScanBtn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
-          Scan
-        </button>
-      </div>
-      <div class="mat-scan-overlay" id="matScanOverlay">
-        <div id="matReader"></div>
-        <button type="button" class="mat-scan-cancel" id="matScanCancelBtn">Cancel scan</button>
-      </div>
-      <select id="matSelect">
-        <option value="">-- Select Material --</option>
-        ${materialsCache.map(m => `<option value="${escapeHtml(m.code)}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="field"><label>Quantity</label><input type="number" id="qtyInput" min="1" step="1" placeholder="0"></div>
-    <div class="field">
-      <label>Transaction Type</label>
-      <div class="type-toggle">
-        <button type="button" id="btnIn" class="active-in">IN — Receive</button>
-        <button type="button" id="btnOut">OUT — Issue</button>
-      </div>
-    </div>
-    <div class="field"><label>Your Name</label><input type="text" id="userInput" placeholder="e.g. Ravi"></div>
-    <div class="field"><label>Remarks (optional)</label><input type="text" id="remarksInput" placeholder="e.g. GRN-0002 or PROD-002"></div>
-    <button class="submit-btn" id="saveBtn">Save Transaction</button>
-  </div>`;
-
-  html += `<div class="section-title">Current Balance</div>`;
-  html += stock.length === 0
-    ? `<div class="card"><div class="empty-row">No materials recorded in this bin yet.</div></div>`
-    : `<div class="card" style="padding:0;overflow-x:auto;"><table><thead><tr><th>Code</th><th>Material</th><th>In</th><th>Out</th><th>Bal.</th></tr></thead><tbody>
-        ${stock.map(s => `<tr><td>${escapeHtml(s.code)}</td><td class="name">${escapeHtml(s.name)}</td><td>${s.in}</td><td>${s.out}</td><td class="${s.balance < 0 ? 'bal-neg' : 'bal-pos'}">${s.balance}</td></tr>`).join('')}
-      </tbody></table></div>`;
-
-  html += `<div class="section-title">Recent Activity</div>`;
-  html += hist.length === 0
-    ? `<div class="card"><div class="empty-row">No transactions yet for this bin.</div></div>`
-    : `<div class="card" style="padding:0;overflow-x:auto;"><table><thead><tr><th>Date</th><th>Code</th><th>Type</th><th>Qty</th><th>User</th></tr></thead><tbody>
-        ${hist.slice(0, 25).map(x => `<tr><td>${formatDate(x.date)}</td><td>${escapeHtml(x.code)}</td><td class="type-${x.type}">${escapeHtml(x.type)}</td><td>${x.type === 'IN' ? x.in : x.out}</td><td class="name">${escapeHtml(x.user || '')}</td></tr>`).join('')}
-      </tbody></table></div>`;
-
-  html += `<div class="manual-toggle"><button id="scanAnotherBtn" style="background:none;border:none;color:var(--teal-700);font-size:13px;text-decoration:underline;cursor:pointer;">Scan another bin</button></div>`;
-
-  resultArea.innerHTML = html;
-
-  document.getElementById('btnIn').addEventListener('click', () => setTxType('IN'));
-  document.getElementById('btnOut').addEventListener('click', () => setTxType('OUT'));
-  document.getElementById('saveBtn').addEventListener('click', submitTransaction);
-  document.getElementById('matScanBtn').addEventListener('click', startMaterialScanner);
-  document.getElementById('matScanCancelBtn').addEventListener('click', stopMaterialScanner);
-  document.getElementById('scanAnotherBtn').addEventListener('click', () => {
-    resultArea.innerHTML = '';
-    showChoiceScreen();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  pending.forEach(g => {
+    html += `<div class="card" style="margin-top:10px;border-color:var(--warn);">
+      <b>${esc(g.id)}</b> · ${esc(g.vendorName)} · ${esc(g.grnDate)}
+      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Received</th><th>Accept</th><th>Reject</th></tr></thead>
+      <tbody>${(g.lines||[]).map((l, i) => `
+        <tr>
+          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
+          <td>${l.receivedQty}</td>
+          <td><input type="number" min="0" max="${l.receivedQty}" class="qcAccept" data-grn="${esc(g.id)}" data-idx="${i}" value="${l.receivedQty}"></td>
+          <td><input type="number" min="0" value="0" class="qcReject" data-grn="${esc(g.id)}" data-idx="${i}"></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="btn" data-qc-submit="${esc(g.id)}">Submit QC & Update Stock</button>
+    </div>`;
   });
+  document.getElementById('qcList').innerHTML = html;
 
-  const savedUser = localStorage.getItem('pmsd_user_name');
-  if (savedUser) document.getElementById('userInput').value = savedUser;
-}
+  document.querySelectorAll('[data-qc-submit]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const grnNo = btn.dataset.qcSubmit;
+      const g = pending.find(x => x.id === grnNo);
+      const updatedLines = g.lines.map((l, i) => {
+        const acc = Number(document.querySelector(`.qcAccept[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
+        const rej = Number(document.querySelector(`.qcReject[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
+        return { ...l, acceptedQty: acc, rejectedQty: rej, qcStatus: rej > 0 ? (acc > 0 ? 'PARTIAL' : 'FAIL') : 'PASS' };
+      });
 
-let matQrCode = null;
+      await updateDoc(doc(db, "grn", grnNo), { status: 'COMPLETED', lines: updatedLines, qcBy: currentUser.email, qcAt: serverTimestamp() });
 
-function startMaterialScanner() {
-  document.getElementById('matScanOverlay').classList.add('open');
-  matQrCode = new Html5Qrcode("matReader");
-  matQrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 220, height: 220 } },
-    (decodedText) => {
-      let code = decodedText.trim();
-      try {
-        const u = new URL(decodedText);
-        if (u.searchParams.get('code')) code = u.searchParams.get('code');
-      } catch (e) { /* raw text, use as-is */ }
-
-      stopMaterialScanner();
-
-      const match = materialsCache.find(m => m.code.toLowerCase() === code.toLowerCase());
-      if (match) {
-        document.getElementById('matSelect').value = match.code;
-      } else {
-        resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">Scanned code "${escapeHtml(code)}" doesn't match any material in Material Master.</div>`);
+      for (const l of updatedLines) {
+        if (l.acceptedQty > 0) {
+          await addDoc(collection(db, "stockLedger"), {
+            dateTime: serverTimestamp(), txnType: 'GRN-IN', itemCode: l.itemCode, batchNo: l.batchNo || '',
+            qty: l.acceptedQty, fromLocation: '', toLocation: 'QC-HOLD', refNo: grnNo, user: currentUser.email,
+            remarks: `QC ${l.qcStatus}`
+          });
+        }
       }
-    },
-    () => {}
-  ).catch((err) => {
-    stopMaterialScanner();
-    resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">Camera couldn't start (${escapeHtml(String(err))}). Please allow camera access, or pick from the dropdown instead.</div>`);
+      renderQC(main);
+    });
   });
 }
 
-function stopMaterialScanner() {
-  document.getElementById('matScanOverlay').classList.remove('open');
-  if (matQrCode) matQrCode.stop().then(() => matQrCode.clear()).catch(() => {});
+// ---------------- Stock Ledger ----------------
+async function renderStock(main) {
+  main.innerHTML = `<div class="card"><h2>Stock Ledger</h2><div id="stockList">Loading…</div></div>`;
+  const snap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(100)));
+  const rows = snap.docs.map(d => d.data());
+  document.getElementById('stockList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>'
+    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>From</th><th>To</th><th>Ref</th><th>User</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td><span class="chip neutral">${esc(r.txnType)}</span></td><td>${esc(r.itemCode)}</td><td>${r.qty}</td><td>${esc(r.fromLocation)}</td><td>${esc(r.toLocation)}</td><td>${esc(r.refNo)}</td><td class="name">${esc(r.user)}</td></tr>`).join('')}
+      </tbody></table>`;
 }
 
-function setTxType(t) {
-  txType = t;
-  document.getElementById('btnIn').className = t === 'IN' ? 'active-in' : '';
-  document.getElementById('btnOut').className = t === 'OUT' ? 'active-out' : '';
-}
-
-async function submitTransaction() {
-  const code = document.getElementById('matSelect').value;
-  const qty = document.getElementById('qtyInput').value;
-  const user = document.getElementById('userInput').value.trim();
-  const remarks = document.getElementById('remarksInput').value.trim();
-  const btn = document.getElementById('saveBtn');
-
-  if (!code) { alert('Please select a material.'); return; }
-  if (!qty || Number(qty) <= 0) { alert('Please enter a valid quantity.'); return; }
-
-  if (user) localStorage.setItem('pmsd_user_name', user);
-
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-
-  try {
-    const params = new URLSearchParams({ action: 'save', bin: currentBinId, code, qty, type: txType, user, remarks, format: 'json' });
-    const res = await fetch(`${WEBAPP_URL}?${params.toString()}`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.error) {
-      resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">${escapeHtml(data.error)}</div>`);
-      btn.disabled = false;
-      btn.textContent = 'Save Transaction';
-      return;
-    }
-    renderBin(data, data.message || 'Saved.');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (err) {
-    alert("Couldn't save — check your internet connection and try again.");
-    btn.disabled = false;
-    btn.textContent = 'Save Transaction';
+// ---------------- Users (role admin) ----------------
+async function renderUsers(main) {
+  main.innerHTML = `<div class="card"><h2>Users</h2><div id="usersList">Loading…</div></div>`;
+  if (currentRole !== 'ADMIN') {
+    document.getElementById('usersList').innerHTML = '<p style="font-size:13px;color:var(--danger);">Only Admins can manage users.</p>';
+    return;
   }
-}
+  const snap = await getDocs(collection(db, "users"));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('usersList').innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Change Role</th></tr></thead><tbody>
+    ${rows.map(u => `<tr><td class="name">${esc(u.email)}</td><td><span class="chip ${u.role==='PENDING'?'warn':'ok'}">${esc(u.role)}</span></td><td>${esc(u.status)}</td>
+    <td><select data-uid="${u.id}" class="roleSelect">
+      ${['PENDING','ADMIN','STORE','QC','PICKER','SUPERVISOR','LINE OPERATOR'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join('')}
+    </select></td></tr>`).join('')}
+  </tbody></table>`;
 
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-function formatDate(d) {
-  try {
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  } catch (e) { return d; }
+  document.querySelectorAll('.roleSelect').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await updateDoc(doc(db, "users", sel.dataset.uid), { role: sel.value });
+      alert('Role updated.');
+    });
+  });
 }
 </script>
 </body>
