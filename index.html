@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#005266">
+<title>PMSD Store Intake — Bin Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --teal-900:#00343F; --teal-700:#005266; --teal-500:#0A7A94; --teal-100:#DFE7E1;
+    --white:#FFFFFF; --ink:#0D2B30; --ink-soft:#4B6067; --line:#C7D3CE;
+    --ok:#1F7A3D; --ok-bg:#E4F3E8; --warn:#B5790A; --warn-bg:#FBF0DC;
+    --danger:#B3261E; --danger-bg:#FBE4E2; --radius:10px;
+    --font-ui:'IBM Plex Sans',system-ui,sans-serif; --font-code:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--font-ui);background:var(--teal-100);color:var(--ink);-webkit-font-smoothing:antialiased;}
+  header{background:var(--teal-700);color:var(--white);padding:18px 20px 20px;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15);}
+  header .brand{display:flex;align-items:baseline;gap:8px;}
+  header .brand .mark{font-family:var(--font-code);font-weight:700;letter-spacing:.5px;background:var(--white);color:var(--teal-700);padding:2px 7px;border-radius:6px;font-size:12px;}
+  header h1{font-size:18px;margin:6px 0 2px;font-weight:600;}
+  header p{margin:0;font-size:12.5px;color:#C9E3EA;font-family:var(--font-code);}
+  main{max-width:520px;margin:0 auto;padding:16px 16px 60px;}
+
+  .file-warning{background:#3A2A00;color:#FFE9B0;border-radius:var(--radius);padding:14px 16px;margin-top:14px;font-size:13px;line-height:1.5;}
+  .file-warning b{color:#FFD166;}
+
+  .scan-zone{background:var(--teal-900);border-radius:var(--radius);overflow:hidden;position:relative;margin-top:14px;}
+  #reader{width:100%;}
+  .scan-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px 20px;color:#AFCBD2;text-align:center;gap:14px;}
+  .choice-row{display:flex;gap:10px;width:100%;max-width:340px;}
+  .choice-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;border-radius:12px;border:none;cursor:pointer;font-family:var(--font-ui);font-weight:600;font-size:13.5px;}
+  .choice-btn.primary{background:var(--white);color:var(--teal-700);}
+  .choice-btn.secondary{background:rgba(255,255,255,.08);color:#DDEEF2;border:1.5px solid rgba(255,255,255,.35);}
+  .choice-btn:active{transform:scale(.97);}
+  .choice-btn svg{stroke:currentColor;}
+  .scan-line{position:absolute;left:6%;right:6%;height:2px;background:linear-gradient(90deg,transparent,#4FD1E8,transparent);box-shadow:0 0 8px #4FD1E8;animation:sweep 2.1s ease-in-out infinite;pointer-events:none;}
+  @keyframes sweep{0%{top:12%;opacity:0;}10%{opacity:1;}50%{top:85%;opacity:1;}90%{opacity:1;}100%{top:12%;opacity:0;}}
+
+  .manual-entry{display:none;flex-direction:column;align-items:center;gap:10px;padding:34px 20px;color:#AFCBD2;}
+  .manual-entry.open{display:flex;}
+  .manual-entry .row{display:flex;gap:8px;width:100%;max-width:280px;}
+  .manual-entry .row input{flex:1;padding:13px 14px;border-radius:8px;border:none;font-family:var(--font-code);font-size:16px;text-align:center;letter-spacing:.5px;}
+  .manual-entry .row button{background:var(--white);color:var(--teal-700);border:none;border-radius:8px;padding:0 18px;font-weight:700;cursor:pointer;font-family:var(--font-ui);}
+  .manual-entry .back-link{background:none;border:none;color:#AFCBD2;font-size:12.5px;text-decoration:underline;cursor:pointer;}
+
+  .card{background:var(--white);border-radius:var(--radius);padding:16px;margin-top:16px;border:1px solid var(--line);}
+  .bin-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .bin-head .id{font-family:var(--font-code);font-size:21px;font-weight:700;color:var(--teal-700);}
+  .status-chip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+  .status-ACTIVE{background:var(--ok-bg);color:var(--ok);}
+  .status-EMPTY{background:var(--teal-100);color:var(--ink-soft);}
+  .status-UNDER,.status-DISABLED{background:var(--danger-bg);color:var(--danger);}
+  .meta-row{display:flex;gap:18px;margin-top:10px;font-size:12.5px;color:var(--ink-soft);}
+  .meta-row b{color:var(--ink);font-family:var(--font-code);}
+
+  .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:600;margin:22px 2px 8px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);padding:6px 8px;border-bottom:1px solid var(--line);}
+  tbody td{padding:9px 8px;border-bottom:1px solid #EEF2F0;font-family:var(--font-code);}
+  tbody td.name{font-family:var(--font-ui);}
+  .bal-neg{color:var(--danger);font-weight:700;}
+  .bal-pos{color:var(--ok);font-weight:600;}
+  .type-IN{color:var(--ok);font-weight:600;}
+  .type-OUT{color:var(--warn);font-weight:600;}
+  .empty-row{padding:14px 8px;color:var(--ink-soft);font-size:13px;text-align:center;}
+
+  .form-card{background:#FFFBF0;border:1px solid #E6D5A0;}
+  .form-card h3{margin:0 0 4px;font-size:15px;}
+  .field{margin-top:10px;}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;}
+  .field select,.field input{width:100%;padding:11px 10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:15px;background:var(--white);}
+  .type-toggle{display:flex;gap:8px;}
+  .type-toggle button{flex:1;padding:11px;border-radius:8px;border:1.5px solid var(--line);background:var(--white);font-weight:600;cursor:pointer;font-family:var(--font-ui);}
+  .type-toggle button.active-in{border-color:var(--ok);background:var(--ok-bg);color:var(--ok);}
+  .type-toggle button.active-out{border-color:var(--warn);background:var(--warn-bg);color:var(--warn);}
+  .submit-btn{width:100%;margin-top:14px;padding:13px;border:none;border-radius:8px;background:var(--teal-700);color:var(--white);font-weight:600;font-size:15px;cursor:pointer;}
+  .submit-btn:disabled{opacity:.6;}
+
+  .msg{padding:11px 13px;border-radius:8px;font-size:13.5px;margin-top:16px;}
+  .msg.ok{background:var(--ok-bg);color:var(--ok);}
+  .msg.err{background:var(--danger-bg);color:var(--danger);}
+  .loading{text-align:center;padding:30px;color:var(--ink-soft);font-size:13.5px;}
+  .spinner{width:22px;height:22px;border:3px solid var(--teal-100);border-top-color:var(--teal-700);border-radius:50%;margin:0 auto 10px;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .manual-toggle{text-align:center;margin-top:10px;}
+  footer{text-align:center;padding:20px;font-size:11.5px;color:var(--ink-soft);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="mark">PMSD</span><span style="font-size:12px;color:#C9E3EA;">Store Intake</span></div>
+  <h1>Bin / BOM Tracker</h1>
+  <p id="urlHint">connected to your sheet</p>
+</header>
+
+<main>
+  <div id="fileWarning"></div>
+
+  <div class="scan-zone" id="scanZone">
+    <div class="scan-placeholder" id="scanPlaceholder">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4FD1E8" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
+      <div id="choiceText" style="font-size:13px;margin-top:-4px;">How do you want to find the bin?</div>
+      <div class="choice-row" id="choiceRow">
+        <button class="choice-btn primary" id="startScanBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
+          Scan QR Code
+        </button>
+        <button class="choice-btn secondary" id="manualToggleBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 17h8"/></svg>
+          Enter Bin ID
+        </button>
+      </div>
+    </div>
+    <div class="manual-entry" id="manualForm">
+      <div style="font-size:13px;">Type the Bin ID printed on the label</div>
+      <div class="row">
+        <input type="text" id="manualBinInput" placeholder="e.g. RM-A01-B001" autocapitalize="characters">
+        <button id="manualGoBtn">Go</button>
+      </div>
+      <button class="back-link" id="manualBackBtn">‹ back</button>
+    </div>
+    <div id="reader" style="display:none;"></div>
+  </div>
+
+  <div id="resultArea"></div>
+</main>
+
+<footer>Scan → Sheet · PMSD Store Intake</footer>
+
+<script>
+// ====================================================================
+// CONFIG — your Apps Script Web App URL (from SETTINGS tab in the sheet)
+// ====================================================================
+const DEFAULT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbynBIngmp1B8whOV1-HYyX1Oxf9AONarfVbkIfOFOvyEoo2jBUyHlgoipwVke7bkjLEJw/exec";
+const WEBAPP_URL = localStorage.getItem("pmsd_webapp_url") || DEFAULT_WEBAPP_URL;
+
+// ---- DOM refs ----
+const resultArea = document.getElementById('resultArea');
+const scanPlaceholder = document.getElementById('scanPlaceholder');
+const choiceRow = document.getElementById('choiceRow');
+const choiceText = document.getElementById('choiceText');
+const readerEl = document.getElementById('reader');
+const startScanBtn = document.getElementById('startScanBtn');
+const manualToggleBtn = document.getElementById('manualToggleBtn');
+const manualForm = document.getElementById('manualForm');
+const manualBinInput = document.getElementById('manualBinInput');
+const manualGoBtn = document.getElementById('manualGoBtn');
+const manualBackBtn = document.getElementById('manualBackBtn');
+const fileWarning = document.getElementById('fileWarning');
+
+let html5QrCode = null;
+let currentBinId = null;
+let materialsCache = null;
+let txType = 'IN';
+
+// ---- Warn clearly if opened as a local file (fetch will be blocked by the browser) ----
+if (location.protocol === 'file:') {
+  fileWarning.innerHTML = `<div class="file-warning">
+    <b>Heads up:</b> you opened this file directly from your phone/PC storage.
+    Browsers block network requests from local files for security, so the
+    "Couldn't reach the sheet" error is expected here — it is <b>not</b> a bug.<br><br>
+    Upload this file to <b>GitHub Pages</b> (or any https:// host) and open it from that
+    link — it will work normally there.
+  </div>`;
+}
+
+// ---- Choice screen wiring ----
+manualToggleBtn.addEventListener('click', () => showManualEntry());
+manualBackBtn.addEventListener('click', () => showChoiceScreen());
+manualGoBtn.addEventListener('click', () => {
+  const v = manualBinInput.value.trim();
+  if (v) loadBin(v);
+});
+manualBinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manualGoBtn.click(); });
+startScanBtn.addEventListener('click', startScanner);
+
+function showManualEntry() {
+  choiceRow.style.display = 'none';
+  choiceText.style.display = 'none';
+  manualForm.classList.add('open');
+  manualBinInput.focus();
+}
+function showChoiceScreen() {
+  manualForm.classList.remove('open');
+  choiceRow.style.display = 'flex';
+  choiceText.style.display = 'block';
+  scanPlaceholder.style.display = 'flex';
+  readerEl.style.display = 'none';
+}
+
+// ---- QR scanning ----
+function startScanner() {
+  scanPlaceholder.style.display = 'none';
+  readerEl.style.display = 'block';
+  const scanLine = document.createElement('div');
+  scanLine.className = 'scan-line';
+  document.getElementById('scanZone').appendChild(scanLine);
+
+  html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 230, height: 230 } },
+    (decodedText) => {
+      let binId = decodedText;
+      try {
+        const u = new URL(decodedText);
+        if (u.searchParams.get('bin')) binId = u.searchParams.get('bin');
+      } catch (e) { /* raw text, use as-is */ }
+      stopScanner();
+      loadBin(binId);
+    },
+    () => {}
+  ).catch((err) => {
+    scanLine.remove();
+    showChoiceScreen();
+    resultArea.innerHTML = `<div class="msg err">Camera couldn't start (${escapeHtml(String(err))}). Please allow camera access in your browser, or use "Enter Bin ID" instead.</div>`;
+  });
+}
+function stopScanner() {
+  if (html5QrCode) html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {});
+  const line = document.querySelector('.scan-line');
+  if (line) line.remove();
+  readerEl.style.display = 'none';
+  scanPlaceholder.style.display = 'flex';
+}
+
+// ---- Data loading ----
+async function loadBin(binId) {
+  currentBinId = binId;
+  resultArea.innerHTML = `<div class="loading"><div class="spinner"></div>Loading ${escapeHtml(binId)}…</div>`;
+  try {
+    const res = await fetch(`${WEBAPP_URL}?bin=${encodeURIComponent(binId)}&format=json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) {
+      resultArea.innerHTML = `<div class="msg err">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+    if (!materialsCache) materialsCache = await fetchMaterials();
+    renderBin(data, "");
+  } catch (err) {
+    resultArea.innerHTML = `<div class="msg err">Couldn't reach the sheet (${escapeHtml(String(err.message || err))}). Check your internet connection, or confirm the Apps Script is deployed and the URL in this page's config is correct.</div>`;
+  }
+}
+async function fetchMaterials() {
+  try {
+    const res = await fetch(`${WEBAPP_URL}?action=materials&format=json`);
+    const data = await res.json();
+    return data.materials || [];
+  } catch (e) { return []; }
+}
+
+// ---- Rendering ----
+function renderBin(data, message) {
+  const b = data.bin, stock = data.stock || [], hist = data.history || [];
+  const statusClass = 'status-' + (b.status || '').split(' ')[0].toUpperCase();
+
+  let html = '';
+  if (message) html += `<div class="msg ok">${escapeHtml(message)}</div>`;
+
+  html += `
+  <div class="card">
+    <div class="bin-head">
+      <div class="id">${escapeHtml(b.id)}</div>
+      <span class="status-chip ${statusClass}">${escapeHtml(b.status || '')}</span>
+    </div>
+    <div class="meta-row">
+      <div>Type<br><b>${escapeHtml(b.type || '—')}</b></div>
+      <div>Rack<br><b>${escapeHtml(b.rack || '—')}</b></div>
+      <div>Level<br><b>${escapeHtml(b.level || '—')}</b></div>
+    </div>
+  </div>`;
+
+  html += `
+  <div class="card form-card">
+    <h3>Add Material</h3>
+    <div class="field">
+      <label>Material</label>
+      <select id="matSelect">
+        <option value="">-- Select Material --</option>
+        ${materialsCache.map(m => `<option value="${escapeHtml(m.code)}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Quantity</label><input type="number" id="qtyInput" min="1" step="1" placeholder="0"></div>
+    <div class="field">
+      <label>Transaction Type</label>
+      <div class="type-toggle">
+        <button type="button" id="btnIn" class="active-in">IN — Receive</button>
+        <button type="button" id="btnOut">OUT — Issue</button>
+      </div>
+    </div>
+    <div class="field"><label>Your Name</label><input type="text" id="userInput" placeholder="e.g. Ravi"></div>
+    <div class="field"><label>Remarks (optional)</label><input type="text" id="remarksInput" placeholder="e.g. GRN-0002 or PROD-002"></div>
+    <button class="submit-btn" id="saveBtn">Save Transaction</button>
+  </div>`;
+
+  html += `<div class="section-title">Current Balance</div>`;
+  html += stock.length === 0
+    ? `<div class="card"><div class="empty-row">No materials recorded in this bin yet.</div></div>`
+    : `<div class="card" style="padding:0;overflow-x:auto;"><table><thead><tr><th>Code</th><th>Material</th><th>In</th><th>Out</th><th>Bal.</th></tr></thead><tbody>
+        ${stock.map(s => `<tr><td>${escapeHtml(s.code)}</td><td class="name">${escapeHtml(s.name)}</td><td>${s.in}</td><td>${s.out}</td><td class="${s.balance < 0 ? 'bal-neg' : 'bal-pos'}">${s.balance}</td></tr>`).join('')}
+      </tbody></table></div>`;
+
+  html += `<div class="section-title">Recent Activity</div>`;
+  html += hist.length === 0
+    ? `<div class="card"><div class="empty-row">No transactions yet for this bin.</div></div>`
+    : `<div class="card" style="padding:0;overflow-x:auto;"><table><thead><tr><th>Date</th><th>Code</th><th>Type</th><th>Qty</th><th>User</th></tr></thead><tbody>
+        ${hist.slice(0, 25).map(x => `<tr><td>${formatDate(x.date)}</td><td>${escapeHtml(x.code)}</td><td class="type-${x.type}">${escapeHtml(x.type)}</td><td>${x.type === 'IN' ? x.in : x.out}</td><td class="name">${escapeHtml(x.user || '')}</td></tr>`).join('')}
+      </tbody></table></div>`;
+
+  html += `<div class="manual-toggle"><button id="scanAnotherBtn" style="background:none;border:none;color:var(--teal-700);font-size:13px;text-decoration:underline;cursor:pointer;">Scan another bin</button></div>`;
+
+  resultArea.innerHTML = html;
+
+  document.getElementById('btnIn').addEventListener('click', () => setTxType('IN'));
+  document.getElementById('btnOut').addEventListener('click', () => setTxType('OUT'));
+  document.getElementById('saveBtn').addEventListener('click', submitTransaction);
+  document.getElementById('scanAnotherBtn').addEventListener('click', () => {
+    resultArea.innerHTML = '';
+    showChoiceScreen();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  const savedUser = localStorage.getItem('pmsd_user_name');
+  if (savedUser) document.getElementById('userInput').value = savedUser;
+}
+
+function setTxType(t) {
+  txType = t;
+  document.getElementById('btnIn').className = t === 'IN' ? 'active-in' : '';
+  document.getElementById('btnOut').className = t === 'OUT' ? 'active-out' : '';
+}
+
+async function submitTransaction() {
+  const code = document.getElementById('matSelect').value;
+  const qty = document.getElementById('qtyInput').value;
+  const user = document.getElementById('userInput').value.trim();
+  const remarks = document.getElementById('remarksInput').value.trim();
+  const btn = document.getElementById('saveBtn');
+
+  if (!code) { alert('Please select a material.'); return; }
+  if (!qty || Number(qty) <= 0) { alert('Please enter a valid quantity.'); return; }
+
+  if (user) localStorage.setItem('pmsd_user_name', user);
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const body = new URLSearchParams({ bin: currentBinId, code, qty, type: txType, user, remarks, format: 'json' });
+    const res = await fetch(WEBAPP_URL, { method: 'POST', body });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) {
+      resultArea.insertAdjacentHTML('afterbegin', `<div class="msg err">${escapeHtml(data.error)}</div>`);
+      btn.disabled = false;
+      btn.textContent = 'Save Transaction';
+      return;
+    }
+    renderBin(data, data.message || 'Saved.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    alert("Couldn't save — check your internet connection and try again.");
+    btn.disabled = false;
+    btn.textContent = 'Save Transaction';
+  }
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatDate(d) {
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return d; }
+}
+</script>
+</body>
+</html>
