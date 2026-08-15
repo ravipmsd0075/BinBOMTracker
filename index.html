@@ -17,43 +17,73 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:var(--font-ui);background:var(--teal-100);color:var(--ink);-webkit-font-smoothing:antialiased;}
-  header{background:var(--teal-700);color:var(--white);padding:14px 18px;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15);display:flex;justify-content:space-between;align-items:center;}
+  header{background:var(--teal-700);color:var(--white);padding:14px 18px;position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.15);display:flex;justify-content:space-between;align-items:center;animation:fadeIn .3s ease;}
   header .brand{display:flex;align-items:center;gap:8px;}
-  header .brand .mark{font-family:var(--font-code);font-weight:700;background:var(--white);color:var(--teal-700);padding:2px 7px;border-radius:6px;font-size:12px;}
+  header .brand .mark{font-family:var(--font-code);font-weight:700;background:var(--white);color:var(--teal-700);padding:2px 7px;border-radius:6px;font-size:12px;transition:transform .3s ease;}
+  header .brand .mark:hover{transform:rotate(-4deg) scale(1.05);}
   header .who{font-size:12px;color:#C9E3EA;}
-  header button{background:rgba(255,255,255,.12);color:var(--white);border:none;border-radius:6px;padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:var(--font-ui);}
+  header button{background:rgba(255,255,255,.12);color:var(--white);border:none;border-radius:6px;padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:var(--font-ui);transition:background .2s ease, transform .12s ease;}
+  header button:hover{background:rgba(255,255,255,.22);}
+  header button:active{transform:scale(.95);}
 
   nav{display:flex;overflow-x:auto;background:var(--teal-900);padding:0 8px;}
-  nav button{background:none;border:none;color:#AFCBD2;padding:12px 14px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;font-family:var(--font-ui);border-bottom:3px solid transparent;}
+  nav button{background:none;border:none;color:#AFCBD2;padding:12px 14px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;font-family:var(--font-ui);border-bottom:3px solid transparent;transition:color .2s ease, border-color .25s ease;}
+  nav button:hover{color:var(--white);}
   nav button.active{color:var(--white);border-bottom-color:#4FD1E8;}
 
-  main{max-width:900px;margin:0 auto;padding:16px;padding-bottom:60px;}
-  .card{background:var(--white);border-radius:var(--radius);padding:16px;margin-top:14px;border:1px solid var(--line);}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes popIn{0%{opacity:0;transform:scale(.94);}100%{opacity:1;transform:scale(1);}}
+  @keyframes rowIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
+
+  main{max-width:900px;margin:0 auto;padding:16px;padding-bottom:60px;animation:fadeIn .25s ease;}
+  .card{background:var(--white);border-radius:var(--radius);padding:16px;margin-top:14px;border:1px solid var(--line);animation:fadeInUp .35s cubic-bezier(.2,.8,.3,1) both;transition:box-shadow .25s ease, transform .25s ease;}
+  .card:hover{box-shadow:0 6px 18px rgba(0,52,63,.08);}
+  .card:nth-of-type(1){animation-delay:0s;}
+  .card:nth-of-type(2){animation-delay:.06s;}
+  .card:nth-of-type(3){animation-delay:.12s;}
   .card h2{margin:0 0 12px;font-size:16px;}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   @media(max-width:520px){.grid{grid-template-columns:1fr;}}
   .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;}
-  .field select,.field input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:14.5px;background:var(--white);}
-  .btn{background:var(--teal-700);color:var(--white);border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;margin-top:12px;}
+  .field select,.field input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);font-family:var(--font-ui);font-size:14.5px;background:var(--white);transition:border-color .2s ease, box-shadow .2s ease;}
+  .field select:focus,.field input:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(10,122,148,.15);}
+  .btn{background:var(--teal-700);color:var(--white);border:none;border-radius:8px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer;margin-top:12px;transition:transform .12s ease, box-shadow .2s ease, background .2s ease;}
+  .btn:hover{box-shadow:0 4px 12px rgba(0,82,102,.3);}
+  .btn:active{transform:scale(.96);}
   .btn.secondary{background:var(--teal-100);color:var(--teal-700);}
   .btn.danger{background:var(--danger-bg);color:var(--danger);}
 
   table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
   thead th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--ink-soft);padding:6px 8px;border-bottom:1px solid var(--line);}
-  tbody td{padding:8px;border-bottom:1px solid #EEF2F0;font-family:var(--font-code);}
+  tbody tr{animation:rowIn .3s ease both;}
+  tbody tr:nth-child(1){animation-delay:.02s;} tbody tr:nth-child(2){animation-delay:.05s;} tbody tr:nth-child(3){animation-delay:.08s;}
+  tbody tr:nth-child(4){animation-delay:.11s;} tbody tr:nth-child(5){animation-delay:.14s;} tbody tr:nth-child(6){animation-delay:.17s;}
+  tbody tr:hover{background:#F6FAF8;}
+  tbody td{padding:8px;border-bottom:1px solid #EEF2F0;font-family:var(--font-code);transition:background .15s ease;}
   tbody td.name{font-family:var(--font-ui);}
-  .chip{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
+  .chip{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;text-transform:uppercase;animation:popIn .3s ease both;}
   .chip.ok{background:var(--ok-bg);color:var(--ok);}
   .chip.warn{background:var(--warn-bg);color:var(--warn);}
   .chip.danger{background:var(--danger-bg);color:var(--danger);}
   .chip.neutral{background:var(--teal-100);color:var(--ink-soft);}
 
-  .msg{padding:10px 13px;border-radius:8px;font-size:13.5px;margin-top:12px;}
+  .stat-num{font-size:30px;font-weight:700;color:var(--teal-700);font-family:var(--font-code);display:inline-block;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:520px){.stat-grid{grid-template-columns:1fr;}}
+  .stat-box{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,var(--teal-100),#EFF4F1);border-radius:10px;padding:14px;border:1px solid var(--line);transition:transform .2s ease;}
+  .stat-box:hover{transform:translateY(-2px);}
+  .stat-box .icon{width:38px;height:38px;border-radius:9px;background:var(--teal-700);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .stat-box .icon svg{stroke:var(--white);}
+  .stat-box .lbl{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  tbody tr.critical td:first-child{border-left:3px solid var(--danger);padding-left:6px;}
+
+  .msg{padding:10px 13px;border-radius:8px;font-size:13.5px;margin-top:12px;animation:popIn .3s cubic-bezier(.2,.8,.3,1) both;}
   .msg.ok{background:var(--ok-bg);color:var(--ok);}
   .msg.err{background:var(--danger-bg);color:var(--danger);}
 
-  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-  .login-card{background:var(--white);border-radius:14px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.15);}
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg, var(--teal-100), #cfe0da);}
+  .login-card{background:var(--white);border-radius:14px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.15);animation:popIn .4s cubic-bezier(.2,.8,.3,1) both;}
   .login-card h1{font-size:18px;margin:6px 0 2px;color:var(--teal-700);}
   .login-card p{font-size:12.5px;color:var(--ink-soft);margin:0 0 18px;}
   .hidden{display:none !important;}
@@ -92,6 +122,9 @@
     <button data-tab="locations">Locations</button>
     <button data-tab="grn">GRN / Inward</button>
     <button data-tab="qc">QC</button>
+    <button data-tab="bom">BOM</button>
+    <button data-tab="prodorders">Production Orders</button>
+    <button data-tab="picklist">Pick Lists</button>
     <button data-tab="stock">Stock Ledger</button>
     <button data-tab="users">Users</button>
   </nav>
@@ -206,6 +239,9 @@ function renderTab(tab) {
   if (tab === 'locations') return renderLocations(main);
   if (tab === 'grn') return renderGRN(main);
   if (tab === 'qc') return renderQC(main);
+  if (tab === 'bom') return renderBOM(main);
+  if (tab === 'prodorders') return renderProductionOrders(main);
+  if (tab === 'picklist') return renderPickLists(main);
   if (tab === 'stock') return renderStock(main);
   if (tab === 'users') return renderUsers(main);
 }
@@ -227,15 +263,21 @@ async function renderDashboard(main) {
   const ledgerSnap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(10)));
   const lowStock = await computeLowStock();
 
-  let html = `<div class="grid">
-    <div><b>${itemsCache.length}</b><br><span style="color:var(--ink-soft);font-size:12.5px;">Items in Master</span></div>
-    <div><b>${locationsCache.length}</b><br><span style="color:var(--ink-soft);font-size:12.5px;">Locations</span></div>
+  let html = `<div class="stat-grid">
+    <div class="stat-box">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+      <div><span class="stat-num" data-count="${itemsCache.length}">0</span><div class="lbl">Items in Master</div></div>
+    </div>
+    <div class="stat-box">
+      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></div>
+      <div><span class="stat-num" data-count="${locationsCache.length}">0</span><div class="lbl">Locations</div></div>
+    </div>
   </div>
   <h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Low / Critical Stock</h3>`;
   html += lowStock.length === 0
     ? `<p style="font-size:13px;color:var(--ink-soft);">Nothing below minimum stock right now.</p>`
     : `<table><thead><tr><th>Item</th><th>Current</th><th>Min</th></tr></thead><tbody>
-        ${lowStock.map(x => `<tr><td class="name">${esc(x.itemName)}</td><td>${x.current}</td><td>${x.min}</td></tr>`).join('')}
+        ${lowStock.map(x => `<tr class="${x.current <= 0 ? 'critical' : ''}"><td class="name">${esc(x.itemName)}</td><td>${x.current}</td><td>${x.min}</td></tr>`).join('')}
       </tbody></table>`;
 
   html += `<h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Recent Activity</h3>`;
@@ -247,6 +289,22 @@ async function renderDashboard(main) {
       </tbody></table>`;
 
   document.getElementById('dashStats').innerHTML = html;
+  animateCounters();
+}
+
+function animateCounters() {
+  document.querySelectorAll('.stat-num[data-count]').forEach(el => {
+    const target = Number(el.dataset.count) || 0;
+    const duration = 600;
+    const start = performance.now();
+    function tick(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(eased * target);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
 }
 
 async function computeLowStock() {
@@ -306,225 +364,4 @@ function renderItems(main) {
 }
 
 // ---------------- Location Master ----------------
-function renderLocations(main) {
-  main.innerHTML = `
-  <div class="card">
-    <h2>Add Location</h2>
-    <div class="grid">
-      <div class="field"><label>Location ID</label><input id="locId" placeholder="RM-A01-R2-P03"></div>
-      <div class="field"><label>Zone</label>
-        <select id="locZone"><option>RAW MATERIAL</option><option>WIP</option><option>FINISHED GOODS</option><option>QC-HOLD</option></select>
-      </div>
-      <div class="field"><label>Rack</label><input id="locRack"></div>
-      <div class="field"><label>Row</label><input id="locRow"></div>
-      <div class="field"><label>Position/Bin</label><input id="locPos"></div>
-      <div class="field"><label>Type</label>
-        <select id="locType"><option>STORAGE</option><option>QC-HOLD</option><option>TRANSFER-BIN</option><option>LINE-SIDE</option></select>
-      </div>
-    </div>
-    <button class="btn" id="saveLocBtn">Save Location</button>
-    <div id="locMsg"></div>
-  </div>
-  <div class="card"><h2>Locations (${locationsCache.length})</h2>
-    <table><thead><tr><th>ID</th><th>Zone</th><th>Type</th><th>Status</th></tr></thead>
-    <tbody>${locationsCache.map(l => `<tr><td>${esc(l.id)}</td><td class="name">${esc(l.zone)}</td><td>${esc(l.locationType)}</td><td><span class="chip ok">${esc(l.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
-  </div>`;
-
-  document.getElementById('saveLocBtn').addEventListener('click', async () => {
-    const id = document.getElementById('locId').value.trim();
-    if (!id) { alert('Location ID is required.'); return; }
-    await setDoc(doc(db, "locations", id), {
-      zone: document.getElementById('locZone').value,
-      rack: document.getElementById('locRack').value.trim(),
-      row: document.getElementById('locRow').value.trim(),
-      position: document.getElementById('locPos').value.trim(),
-      locationType: document.getElementById('locType').value,
-      status: "ACTIVE"
-    });
-    await preloadMasters();
-    document.getElementById('locMsg').innerHTML = `<div class="msg ok">Saved: ${esc(id)}</div>`;
-    renderLocations(main);
-  });
-}
-
-// ---------------- GRN ----------------
-let grnLines = [];
-
-function renderGRN(main) {
-  grnLines = [];
-  main.innerHTML = `
-  <div class="card">
-    <h2>New GRN (Material Inward)</h2>
-    <div class="grid">
-      <div class="field"><label>GRN No.</label><input id="grnNo" placeholder="auto if left blank"></div>
-      <div class="field"><label>PO Reference</label><input id="grnPO"></div>
-      <div class="field"><label>Vendor Name</label><input id="grnVendor"></div>
-      <div class="field"><label>GRN Date</label><input id="grnDate" type="date"></div>
-    </div>
-
-    <h3 style="margin-top:16px;font-size:13px;">Add Line Item</h3>
-    <div class="grid">
-      <div class="field"><label>Item</label>
-        <select id="grnItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Qty</label><input id="grnQty" type="number" min="1"></div>
-      <div class="field"><label>Batch No (if applicable)</label><input id="grnBatch"></div>
-    </div>
-    <button class="btn secondary" id="addLineBtn">+ Add Line</button>
-
-    <table class="lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Batch</th><th></th></tr></thead>
-    <tbody id="grnLinesBody"></tbody></table>
-
-    <button class="btn" id="saveGrnBtn">Create GRN</button>
-    <div id="grnMsg"></div>
-  </div>
-  <div class="card"><h2>Recent GRNs</h2><div id="grnList">Loading…</div></div>`;
-
-  document.getElementById('grnDate').value = new Date().toISOString().slice(0,10);
-
-  document.getElementById('addLineBtn').addEventListener('click', () => {
-    const code = document.getElementById('grnItemSel').value;
-    const qty = Number(document.getElementById('grnQty').value);
-    const batch = document.getElementById('grnBatch').value.trim();
-    if (!code || !qty) { alert('Select an item and enter a quantity.'); return; }
-    const item = itemsCache.find(i => i.id === code);
-    grnLines.push({ itemCode: code, itemName: item?.itemName || '', receivedQty: qty, batchNo: batch, qcStatus: 'PENDING' });
-    document.getElementById('grnQty').value = '';
-    document.getElementById('grnBatch').value = '';
-    renderGrnLines();
-  });
-
-  renderGrnLines();
-  loadRecentGRNs();
-
-  document.getElementById('saveGrnBtn').addEventListener('click', async () => {
-    if (grnLines.length === 0) { alert('Add at least one line item.'); return; }
-    const grnNo = document.getElementById('grnNo').value.trim() || ('GRN-' + Date.now());
-    await setDoc(doc(db, "grn", grnNo), {
-      poRef: document.getElementById('grnPO').value.trim(),
-      vendorName: document.getElementById('grnVendor').value.trim(),
-      grnDate: document.getElementById('grnDate').value,
-      status: 'PENDING QC',
-      createdBy: currentUser.email,
-      createdAt: serverTimestamp(),
-      lines: grnLines
-    });
-    document.getElementById('grnMsg').innerHTML = `<div class="msg ok">GRN created: ${esc(grnNo)}. Now goes to QC.</div>`;
-    grnLines = [];
-    renderGrnLines();
-    loadRecentGRNs();
-  });
-}
-
-function renderGrnLines() {
-  document.getElementById('grnLinesBody').innerHTML = grnLines.map((l, idx) => `
-    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.receivedQty}</td><td>${esc(l.batchNo)}</td>
-    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
-  `).join('') || '<tr><td colspan="4" style="color:var(--ink-soft);">No lines added yet.</td></tr>';
-  document.querySelectorAll('#grnLinesBody button[data-idx]').forEach(b => {
-    b.addEventListener('click', () => { grnLines.splice(Number(b.dataset.idx), 1); renderGrnLines(); });
-  });
-}
-
-async function loadRecentGRNs() {
-  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc"), limit(10)));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('grnList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No GRNs yet.</p>'
-    : `<table><thead><tr><th>GRN No</th><th>Vendor</th><th>Lines</th><th>Status</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.vendorName)}</td><td>${(r.lines||[]).length}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
-      </tbody></table>`;
-}
-
-// ---------------- QC ----------------
-async function renderQC(main) {
-  main.innerHTML = `<div class="card"><h2>Pending QC</h2><div id="qcList">Loading…</div></div>`;
-  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc")));
-  const pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => g.status === 'PENDING QC');
-
-  if (pending.length === 0) {
-    document.getElementById('qcList').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Nothing pending QC.</p>';
-    return;
-  }
-
-  let html = '';
-  pending.forEach(g => {
-    html += `<div class="card" style="margin-top:10px;border-color:var(--warn);">
-      <b>${esc(g.id)}</b> · ${esc(g.vendorName)} · ${esc(g.grnDate)}
-      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Received</th><th>Accept</th><th>Reject</th></tr></thead>
-      <tbody>${(g.lines||[]).map((l, i) => `
-        <tr>
-          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
-          <td>${l.receivedQty}</td>
-          <td><input type="number" min="0" max="${l.receivedQty}" class="qcAccept" data-grn="${esc(g.id)}" data-idx="${i}" value="${l.receivedQty}"></td>
-          <td><input type="number" min="0" value="0" class="qcReject" data-grn="${esc(g.id)}" data-idx="${i}"></td>
-        </tr>`).join('')}</tbody></table>
-      <button class="btn" data-qc-submit="${esc(g.id)}">Submit QC & Update Stock</button>
-    </div>`;
-  });
-  document.getElementById('qcList').innerHTML = html;
-
-  document.querySelectorAll('[data-qc-submit]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const grnNo = btn.dataset.qcSubmit;
-      const g = pending.find(x => x.id === grnNo);
-      const updatedLines = g.lines.map((l, i) => {
-        const acc = Number(document.querySelector(`.qcAccept[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
-        const rej = Number(document.querySelector(`.qcReject[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
-        return { ...l, acceptedQty: acc, rejectedQty: rej, qcStatus: rej > 0 ? (acc > 0 ? 'PARTIAL' : 'FAIL') : 'PASS' };
-      });
-
-      await updateDoc(doc(db, "grn", grnNo), { status: 'COMPLETED', lines: updatedLines, qcBy: currentUser.email, qcAt: serverTimestamp() });
-
-      for (const l of updatedLines) {
-        if (l.acceptedQty > 0) {
-          await addDoc(collection(db, "stockLedger"), {
-            dateTime: serverTimestamp(), txnType: 'GRN-IN', itemCode: l.itemCode, batchNo: l.batchNo || '',
-            qty: l.acceptedQty, fromLocation: '', toLocation: 'QC-HOLD', refNo: grnNo, user: currentUser.email,
-            remarks: `QC ${l.qcStatus}`
-          });
-        }
-      }
-      renderQC(main);
-    });
-  });
-}
-
-// ---------------- Stock Ledger ----------------
-async function renderStock(main) {
-  main.innerHTML = `<div class="card"><h2>Stock Ledger</h2><div id="stockList">Loading…</div></div>`;
-  const snap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(100)));
-  const rows = snap.docs.map(d => d.data());
-  document.getElementById('stockList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>'
-    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>From</th><th>To</th><th>Ref</th><th>User</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td><span class="chip neutral">${esc(r.txnType)}</span></td><td>${esc(r.itemCode)}</td><td>${r.qty}</td><td>${esc(r.fromLocation)}</td><td>${esc(r.toLocation)}</td><td>${esc(r.refNo)}</td><td class="name">${esc(r.user)}</td></tr>`).join('')}
-      </tbody></table>`;
-}
-
-// ---------------- Users (role admin) ----------------
-async function renderUsers(main) {
-  main.innerHTML = `<div class="card"><h2>Users</h2><div id="usersList">Loading…</div></div>`;
-  if (currentRole !== 'ADMIN') {
-    document.getElementById('usersList').innerHTML = '<p style="font-size:13px;color:var(--danger);">Only Admins can manage users.</p>';
-    return;
-  }
-  const snap = await getDocs(collection(db, "users"));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('usersList').innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Change Role</th></tr></thead><tbody>
-    ${rows.map(u => `<tr><td class="name">${esc(u.email)}</td><td><span class="chip ${u.role==='PENDING'?'warn':'ok'}">${esc(u.role)}</span></td><td>${esc(u.status)}</td>
-    <td><select data-uid="${u.id}" class="roleSelect">
-      ${['PENDING','ADMIN','STORE','QC','PICKER','SUPERVISOR','LINE OPERATOR'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join('')}
-    </select></td></tr>`).join('')}
-  </tbody></table>`;
-
-  document.querySelectorAll('.roleSelect').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      await updateDoc(doc(db, "users", sel.dataset.uid), { role: sel.value });
-      alert('Role updated.');
-    });
-  });
-}
-</script>
-</body>
-</html>
+functi
