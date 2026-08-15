@@ -117,9 +117,10 @@
       </div>
     </div>
     <div class="manual-entry" id="manualForm">
-      <div style="font-size:13px;">Type the Bin ID printed on the label</div>
+      <div style="font-size:13px;">Select or type the Bin ID</div>
       <div class="row">
-        <input type="text" id="manualBinInput" placeholder="e.g. RM-A01-B001" autocapitalize="characters">
+        <input type="text" id="manualBinInput" list="binListOptions" placeholder="Tap to see all bins…" autocapitalize="characters" autocomplete="off">
+        <datalist id="binListOptions"></datalist>
         <button id="manualGoBtn">Go</button>
       </div>
       <button class="back-link" id="manualBackBtn">‹ back</button>
@@ -136,7 +137,7 @@
 // ====================================================================
 // CONFIG — your Apps Script Web App URL (from SETTINGS tab in the sheet)
 // ====================================================================
-const DEFAULT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbynBIngmp1B8whOV1-HYyX1Oxf9AONarfVbkIfOFOvyEoo2jBUyHlgoipwVke7bkjLEJw/exec";
+const DEFAULT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzaY925YWcIqkWNdP6DgOue4TvvIWpKWTavsOyq0i8SK8UMPnHJTn_x9Mf5_IBK6b_c/exec";
 const WEBAPP_URL = localStorage.getItem("pmsd_webapp_url") || DEFAULT_WEBAPP_URL;
 
 // ---- DOM refs ----
@@ -156,7 +157,23 @@ const fileWarning = document.getElementById('fileWarning');
 let html5QrCode = null;
 let currentBinId = null;
 let materialsCache = null;
+let binsCache = null;
 let txType = 'IN';
+
+async function fetchBins() {
+  try {
+    const res = await fetch(`${WEBAPP_URL}?action=bins&format=json`);
+    const data = await res.json();
+    return data.bins || [];
+  } catch (e) { return []; }
+}
+
+async function populateBinList() {
+  if (binsCache) return;
+  binsCache = await fetchBins();
+  const dl = document.getElementById('binListOptions');
+  dl.innerHTML = binsCache.map(b => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.id)} — ${escapeHtml(b.type || '')}</option>`).join('');
+}
 
 // ---- Warn clearly if opened as a local file (fetch will be blocked by the browser) ----
 if (location.protocol === 'file:') {
@@ -184,6 +201,7 @@ function showManualEntry() {
   choiceText.style.display = 'none';
   manualForm.classList.add('open');
   manualBinInput.focus();
+  populateBinList();
 }
 function showChoiceScreen() {
   manualForm.classList.remove('open');
