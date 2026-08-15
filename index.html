@@ -436,8 +436,8 @@ async function submitTransaction() {
   btn.textContent = 'Saving…';
 
   try {
-    const body = new URLSearchParams({ bin: currentBinId, code, qty, type: txType, user, remarks, format: 'json' });
-    const res = await fetch(WEBAPP_URL, { method: 'POST', body });
+    const params = new URLSearchParams({ action: 'save', bin: currentBinId, code, qty, type: txType, user, remarks, format: 'json' });
+    const res = await fetch(`${WEBAPP_URL}?${params.toString()}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (data.error) {
