@@ -364,4 +364,449 @@ function renderItems(main) {
 }
 
 // ---------------- Location Master ----------------
-functi
+function renderLocations(main) {
+  main.innerHTML = `
+  <div class="card">
+    <h2>Add Location</h2>
+    <div class="grid">
+      <div class="field"><label>Location ID</label><input id="locId" placeholder="RM-A01-R2-P03"></div>
+      <div class="field"><label>Zone</label>
+        <select id="locZone"><option>RAW MATERIAL</option><option>WIP</option><option>FINISHED GOODS</option><option>QC-HOLD</option></select>
+      </div>
+      <div class="field"><label>Rack</label><input id="locRack"></div>
+      <div class="field"><label>Row</label><input id="locRow"></div>
+      <div class="field"><label>Position/Bin</label><input id="locPos"></div>
+      <div class="field"><label>Type</label>
+        <select id="locType"><option>STORAGE</option><option>QC-HOLD</option><option>TRANSFER-BIN</option><option>LINE-SIDE</option></select>
+      </div>
+    </div>
+    <button class="btn" id="saveLocBtn">Save Location</button>
+    <div id="locMsg"></div>
+  </div>
+  <div class="card"><h2>Locations (${locationsCache.length})</h2>
+    <table><thead><tr><th>ID</th><th>Zone</th><th>Type</th><th>Status</th></tr></thead>
+    <tbody>${locationsCache.map(l => `<tr><td>${esc(l.id)}</td><td class="name">${esc(l.zone)}</td><td>${esc(l.locationType)}</td><td><span class="chip ok">${esc(l.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
+  </div>`;
+
+  document.getElementById('saveLocBtn').addEventListener('click', async () => {
+    const id = document.getElementById('locId').value.trim();
+    if (!id) { alert('Location ID is required.'); return; }
+    await setDoc(doc(db, "locations", id), {
+      zone: document.getElementById('locZone').value,
+      rack: document.getElementById('locRack').value.trim(),
+      row: document.getElementById('locRow').value.trim(),
+      position: document.getElementById('locPos').value.trim(),
+      locationType: document.getElementById('locType').value,
+      status: "ACTIVE"
+    });
+    await preloadMasters();
+    document.getElementById('locMsg').innerHTML = `<div class="msg ok">Saved: ${esc(id)}</div>`;
+    renderLocations(main);
+  });
+}
+
+// ---------------- GRN ----------------
+let grnLines = [];
+
+function renderGRN(main) {
+  grnLines = [];
+  main.innerHTML = `
+  <div class="card">
+    <h2>New GRN (Material Inward)</h2>
+    <div class="grid">
+      <div class="field"><label>GRN No.</label><input id="grnNo" placeholder="auto if left blank"></div>
+      <div class="field"><label>PO Reference</label><input id="grnPO"></div>
+      <div class="field"><label>Vendor Name</label><input id="grnVendor"></div>
+      <div class="field"><label>GRN Date</label><input id="grnDate" type="date"></div>
+    </div>
+
+    <h3 style="margin-top:16px;font-size:13px;">Add Line Item</h3>
+    <div class="grid">
+      <div class="field"><label>Item</label>
+        <select id="grnItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Qty</label><input id="grnQty" type="number" min="1"></div>
+      <div class="field"><label>Batch No (if applicable)</label><input id="grnBatch"></div>
+    </div>
+    <button class="btn secondary" id="addLineBtn">+ Add Line</button>
+
+    <table class="lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Batch</th><th></th></tr></thead>
+    <tbody id="grnLinesBody"></tbody></table>
+
+    <button class="btn" id="saveGrnBtn">Create GRN</button>
+    <div id="grnMsg"></div>
+  </div>
+  <div class="card"><h2>Recent GRNs</h2><div id="grnList">Loading…</div></div>`;
+
+  document.getElementById('grnDate').value = new Date().toISOString().slice(0,10);
+
+  document.getElementById('addLineBtn').addEventListener('click', () => {
+    const code = document.getElementById('grnItemSel').value;
+    const qty = Number(document.getElementById('grnQty').value);
+    const batch = document.getElementById('grnBatch').value.trim();
+    if (!code || !qty) { alert('Select an item and enter a quantity.'); return; }
+    const item = itemsCache.find(i => i.id === code);
+    grnLines.push({ itemCode: code, itemName: item?.itemName || '', receivedQty: qty, batchNo: batch, qcStatus: 'PENDING' });
+    document.getElementById('grnQty').value = '';
+    document.getElementById('grnBatch').value = '';
+    renderGrnLines();
+  });
+
+  renderGrnLines();
+  loadRecentGRNs();
+
+  document.getElementById('saveGrnBtn').addEventListener('click', async () => {
+    if (grnLines.length === 0) { alert('Add at least one line item.'); return; }
+    const grnNo = document.getElementById('grnNo').value.trim() || ('GRN-' + Date.now());
+    await setDoc(doc(db, "grn", grnNo), {
+      poRef: document.getElementById('grnPO').value.trim(),
+      vendorName: document.getElementById('grnVendor').value.trim(),
+      grnDate: document.getElementById('grnDate').value,
+      status: 'PENDING QC',
+      createdBy: currentUser.email,
+      createdAt: serverTimestamp(),
+      lines: grnLines
+    });
+    document.getElementById('grnMsg').innerHTML = `<div class="msg ok">GRN created: ${esc(grnNo)}. Now goes to QC.</div>`;
+    grnLines = [];
+    renderGrnLines();
+    loadRecentGRNs();
+  });
+}
+
+function renderGrnLines() {
+  document.getElementById('grnLinesBody').innerHTML = grnLines.map((l, idx) => `
+    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.receivedQty}</td><td>${esc(l.batchNo)}</td>
+    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
+  `).join('') || '<tr><td colspan="4" style="color:var(--ink-soft);">No lines added yet.</td></tr>';
+  document.querySelectorAll('#grnLinesBody button[data-idx]').forEach(b => {
+    b.addEventListener('click', () => { grnLines.splice(Number(b.dataset.idx), 1); renderGrnLines(); });
+  });
+}
+
+async function loadRecentGRNs() {
+  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc"), limit(10)));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('grnList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No GRNs yet.</p>'
+    : `<table><thead><tr><th>GRN No</th><th>Vendor</th><th>Lines</th><th>Status</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.vendorName)}</td><td>${(r.lines||[]).length}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
+      </tbody></table>`;
+}
+
+// ---------------- QC ----------------
+async function renderQC(main) {
+  main.innerHTML = `<div class="card"><h2>Pending QC</h2><div id="qcList">Loading…</div></div>`;
+  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc")));
+  const pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => g.status === 'PENDING QC');
+
+  if (pending.length === 0) {
+    document.getElementById('qcList').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Nothing pending QC.</p>';
+    return;
+  }
+
+  let html = '';
+  pending.forEach(g => {
+    html += `<div class="card" style="margin-top:10px;border-color:var(--warn);">
+      <b>${esc(g.id)}</b> · ${esc(g.vendorName)} · ${esc(g.grnDate)}
+      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Received</th><th>Accept</th><th>Reject</th></tr></thead>
+      <tbody>${(g.lines||[]).map((l, i) => `
+        <tr>
+          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
+          <td>${l.receivedQty}</td>
+          <td><input type="number" min="0" max="${l.receivedQty}" class="qcAccept" data-grn="${esc(g.id)}" data-idx="${i}" value="${l.receivedQty}"></td>
+          <td><input type="number" min="0" value="0" class="qcReject" data-grn="${esc(g.id)}" data-idx="${i}"></td>
+        </tr>`).join('')}</tbody></table>
+      <button class="btn" data-qc-submit="${esc(g.id)}">Submit QC & Update Stock</button>
+    </div>`;
+  });
+  document.getElementById('qcList').innerHTML = html;
+
+  document.querySelectorAll('[data-qc-submit]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const grnNo = btn.dataset.qcSubmit;
+      const g = pending.find(x => x.id === grnNo);
+      const updatedLines = g.lines.map((l, i) => {
+        const acc = Number(document.querySelector(`.qcAccept[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
+        const rej = Number(document.querySelector(`.qcReject[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
+        return { ...l, acceptedQty: acc, rejectedQty: rej, qcStatus: rej > 0 ? (acc > 0 ? 'PARTIAL' : 'FAIL') : 'PASS' };
+      });
+
+      await updateDoc(doc(db, "grn", grnNo), { status: 'COMPLETED', lines: updatedLines, qcBy: currentUser.email, qcAt: serverTimestamp() });
+
+      for (const l of updatedLines) {
+        if (l.acceptedQty > 0) {
+          await addDoc(collection(db, "stockLedger"), {
+            dateTime: serverTimestamp(), txnType: 'GRN-IN', itemCode: l.itemCode, batchNo: l.batchNo || '',
+            qty: l.acceptedQty, fromLocation: '', toLocation: 'QC-HOLD', refNo: grnNo, user: currentUser.email,
+            remarks: `QC ${l.qcStatus}`
+          });
+        }
+      }
+      renderQC(main);
+    });
+  });
+}
+
+// ---------------- Helpers: current stock per item/location ----------------
+async function computeStockByItemLocation() {
+  const snap = await getDocs(collection(db, "stockLedger"));
+  const map = {}; // itemCode -> { locationId: qty }
+  snap.docs.forEach(d => {
+    const r = d.data();
+    if (!map[r.itemCode]) map[r.itemCode] = {};
+    if (r.toLocation) map[r.itemCode][r.toLocation] = (map[r.itemCode][r.toLocation] || 0) + (Number(r.qty) || 0);
+    if (r.fromLocation) map[r.itemCode][r.fromLocation] = (map[r.itemCode][r.fromLocation] || 0) - (Number(r.qty) || 0);
+  });
+  return map;
+}
+function bestLocationFor(stockMap, itemCode) {
+  const locs = stockMap[itemCode];
+  if (!locs) return '';
+  let best = '', bestQty = -Infinity;
+  Object.keys(locs).forEach(loc => { if (locs[loc] > bestQty) { bestQty = locs[loc]; best = loc; } });
+  return bestQty > 0 ? best : '';
+}
+
+// ---------------- BOM Management ----------------
+let bomLines = [];
+
+async function renderBOM(main) {
+  bomLines = [];
+  main.innerHTML = `
+  <div class="card">
+    <h2>Define / Update BOM</h2>
+    <div class="grid">
+      <div class="field"><label>Product Code</label><input id="bomProduct" placeholder="e.g. FG-COOLER-01"></div>
+      <div class="field"><label>Product Name</label><input id="bomProductName"></div>
+    </div>
+
+    <h3 style="margin-top:16px;font-size:13px;">Add Component</h3>
+    <div class="grid">
+      <div class="field"><label>Component Item</label>
+        <select id="bomItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Qty per Unit</label><input id="bomQtyPer" type="number" min="0.001" step="0.001"></div>
+    </div>
+    <button class="btn secondary" id="addBomLineBtn">+ Add Component</button>
+
+    <table class="lines-table"><thead><tr><th>Item</th><th>Qty/Unit</th><th></th></tr></thead>
+    <tbody id="bomLinesBody"></tbody></table>
+
+    <button class="btn" id="saveBomBtn">Save BOM</button>
+    <div id="bomMsg"></div>
+  </div>
+  <div class="card"><h2>Existing BOMs</h2><div id="bomList">Loading…</div></div>`;
+
+  renderBomLines();
+  loadBomList();
+
+  document.getElementById('addBomLineBtn').addEventListener('click', () => {
+    const code = document.getElementById('bomItemSel').value;
+    const qty = Number(document.getElementById('bomQtyPer').value);
+    if (!code || !qty) { alert('Select a component and enter qty per unit.'); return; }
+    const item = itemsCache.find(i => i.id === code);
+    bomLines.push({ itemCode: code, itemName: item?.itemName || '', qtyPerUnit: qty, uom: item?.uom || '' });
+    document.getElementById('bomQtyPer').value = '';
+    renderBomLines();
+  });
+
+  document.getElementById('saveBomBtn').addEventListener('click', async () => {
+    const product = document.getElementById('bomProduct').value.trim();
+    if (!product) { alert('Enter a Product Code.'); return; }
+    if (bomLines.length === 0) { alert('Add at least one component.'); return; }
+    await setDoc(doc(db, "bom", product), {
+      productName: document.getElementById('bomProductName').value.trim(),
+      components: bomLines,
+      updatedBy: currentUser.email,
+      updatedAt: serverTimestamp()
+    });
+    document.getElementById('bomMsg').innerHTML = `<div class="msg ok">BOM saved for ${esc(product)}.</div>`;
+    bomLines = [];
+    renderBomLines();
+    loadBomList();
+  });
+}
+
+function renderBomLines() {
+  document.getElementById('bomLinesBody').innerHTML = bomLines.map((l, idx) => `
+    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.qtyPerUnit} ${esc(l.uom)}</td>
+    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
+  `).join('') || '<tr><td colspan="3" style="color:var(--ink-soft);">No components added yet.</td></tr>';
+  document.querySelectorAll('#bomLinesBody button[data-idx]').forEach(b => {
+    b.addEventListener('click', () => { bomLines.splice(Number(b.dataset.idx), 1); renderBomLines(); });
+  });
+}
+
+async function loadBomList() {
+  const snap = await getDocs(collection(db, "bom"));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('bomList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No BOMs defined yet.</p>'
+    : `<table><thead><tr><th>Product</th><th>Name</th><th>Components</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.productName)}</td><td>${(r.components||[]).length}</td></tr>`).join('')}
+      </tbody></table>`;
+}
+
+// ---------------- Production Orders + Auto Pick List ----------------
+async function renderProductionOrders(main) {
+  const bomSnap = await getDocs(collection(db, "bom"));
+  const bomList = bomSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  main.innerHTML = `
+  <div class="card">
+    <h2>New Production Order</h2>
+    <div class="grid">
+      <div class="field"><label>Order No.</label><input id="poNo" placeholder="auto if left blank"></div>
+      <div class="field"><label>Product (BOM)</label>
+        <select id="poProduct"><option value="">-- Select --</option>${bomList.map(b => `<option value="${esc(b.id)}">${esc(b.id)} — ${esc(b.productName)}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Machine</label><input id="poMachine"></div>
+      <div class="field"><label>Planned Qty</label><input id="poQty" type="number" min="1"></div>
+    </div>
+    <button class="btn" id="createPoBtn">Create Order & Generate Pick List</button>
+    <div id="poMsg"></div>
+  </div>
+  <div class="card"><h2>Production Orders</h2><div id="poList">Loading…</div></div>`;
+
+  loadProductionOrders();
+
+  document.getElementById('createPoBtn').addEventListener('click', async () => {
+    const productCode = document.getElementById('poProduct').value;
+    const plannedQty = Number(document.getElementById('poQty').value);
+    const machine = document.getElementById('poMachine').value.trim();
+    const msg = document.getElementById('poMsg');
+    if (!productCode || !plannedQty) { alert('Select a product and enter planned qty.'); return; }
+
+    const bomDoc = bomList.find(b => b.id === productCode);
+    if (!bomDoc || !bomDoc.components || bomDoc.components.length === 0) {
+      msg.innerHTML = `<div class="msg err">No BOM components found for ${esc(productCode)}. Define the BOM first.</div>`;
+      return;
+    }
+
+    const orderNo = document.getElementById('poNo').value.trim() || ('PO-' + Date.now());
+    await setDoc(doc(db, "productionOrders", orderNo), {
+      productCode, machine, plannedQty, status: 'PICKING', orderDate: new Date().toISOString().slice(0,10),
+      createdBy: currentUser.email, createdAt: serverTimestamp()
+    });
+
+    const stockMap = await computeStockByItemLocation();
+    const pickListNo = 'PL-' + orderNo;
+    const lines = bomDoc.components.map(c => ({
+      itemCode: c.itemCode, itemName: c.itemName,
+      requiredQty: Math.ceil(c.qtyPerUnit * plannedQty * 1000) / 1000,
+      suggestedLocation: bestLocationFor(stockMap, c.itemCode),
+      pickedQty: 0, status: 'PENDING'
+    }));
+
+    await setDoc(doc(db, "pickLists", pickListNo), {
+      productionOrderNo: orderNo, status: 'GENERATED', generatedDate: serverTimestamp(), lines
+    });
+
+    msg.innerHTML = `<div class="msg ok">Order ${esc(orderNo)} created. Pick List ${esc(pickListNo)} generated with ${lines.length} item(s) — check the "Pick Lists" tab.</div>`;
+    document.getElementById('poNo').value = '';
+    document.getElementById('poQty').value = '';
+    loadProductionOrders();
+  });
+}
+
+async function loadProductionOrders() {
+  const snap = await getDocs(query(collection(db, "productionOrders"), orderBy("createdAt", "desc"), limit(20)));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('poList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No production orders yet.</p>'
+    : `<table><thead><tr><th>Order No</th><th>Product</th><th>Machine</th><th>Qty</th><th>Status</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.productCode)}</td><td>${esc(r.machine)}</td><td>${r.plannedQty}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
+      </tbody></table>`;
+}
+
+// ---------------- Pick Lists ----------------
+async function renderPickLists(main) {
+  main.innerHTML = `<div class="card"><h2>Pick Lists</h2><div id="pickListArea">Loading…</div></div>`;
+  const snap = await getDocs(query(collection(db, "pickLists"), orderBy("generatedDate", "desc"), limit(20)));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  if (rows.length === 0) {
+    document.getElementById('pickListArea').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">No pick lists yet — create a Production Order to generate one.</p>';
+    return;
+  }
+
+  let html = '';
+  rows.forEach(pl => {
+    const done = (pl.lines||[]).every(l => l.status === 'PICKED');
+    html += `<div class="card" style="margin-top:10px;">
+      <b>${esc(pl.id)}</b> · Order: ${esc(pl.productionOrderNo)} · <span class="chip ${done?'ok':'warn'}">${done?'READY FOR TRANSFER':pl.status}</span>
+      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Required</th><th>From Location</th><th>Status</th><th></th></tr></thead>
+      <tbody>${(pl.lines||[]).map((l, i) => `
+        <tr>
+          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
+          <td>${l.requiredQty}</td>
+          <td>${esc(l.suggestedLocation) || '<span style="color:var(--danger);">no stock found</span>'}</td>
+          <td><span class="chip ${l.status==='PICKED'?'ok':'warn'}">${esc(l.status)}</span></td>
+          <td>${l.status !== 'PICKED' ? `<button class="btn secondary" style="padding:5px 10px;margin:0;font-size:11px;" data-pl="${esc(pl.id)}" data-idx="${i}">Mark Picked</button>` : ''}</td>
+        </tr>`).join('')}</tbody></table>
+    </div>`;
+  });
+  document.getElementById('pickListArea').innerHTML = html;
+
+  document.querySelectorAll('[data-pl]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const plId = btn.dataset.pl, idx = Number(btn.dataset.idx);
+      const plRef = doc(db, "pickLists", plId);
+      const plSnap = await getDoc(plRef);
+      const pl = plSnap.data();
+      const line = pl.lines[idx];
+
+      await addDoc(collection(db, "stockLedger"), {
+        dateTime: serverTimestamp(), txnType: 'PICK', itemCode: line.itemCode, batchNo: '',
+        qty: line.requiredQty, fromLocation: line.suggestedLocation, toLocation: 'PICKING-TRANSIT',
+        refNo: plId, user: currentUser.email, remarks: `For ${pl.productionOrderNo}`
+      });
+
+      pl.lines[idx].pickedQty = line.requiredQty;
+      pl.lines[idx].status = 'PICKED';
+      const allDone = pl.lines.every(l => l.status === 'PICKED');
+      await updateDoc(plRef, { lines: pl.lines, status: allDone ? 'COMPLETED' : 'IN PROGRESS' });
+      renderPickLists(main);
+    });
+  });
+}
+
+// ---------------- Stock Ledger ----------------
+async function renderStock(main) {
+  main.innerHTML = `<div class="card"><h2>Stock Ledger</h2><div id="stockList">Loading…</div></div>`;
+  const snap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(100)));
+  const rows = snap.docs.map(d => d.data());
+  document.getElementById('stockList').innerHTML = rows.length === 0
+    ? '<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>'
+    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>From</th><th>To</th><th>Ref</th><th>User</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td><span class="chip neutral">${esc(r.txnType)}</span></td><td>${esc(r.itemCode)}</td><td>${r.qty}</td><td>${esc(r.fromLocation)}</td><td>${esc(r.toLocation)}</td><td>${esc(r.refNo)}</td><td class="name">${esc(r.user)}</td></tr>`).join('')}
+      </tbody></table>`;
+}
+
+// ---------------- Users (role admin) ----------------
+async function renderUsers(main) {
+  main.innerHTML = `<div class="card"><h2>Users</h2><div id="usersList">Loading…</div></div>`;
+  if (currentRole !== 'ADMIN') {
+    document.getElementById('usersList').innerHTML = '<p style="font-size:13px;color:var(--danger);">Only Admins can manage users.</p>';
+    return;
+  }
+  const snap = await getDocs(collection(db, "users"));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('usersList').innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Change Role</th></tr></thead><tbody>
+    ${rows.map(u => `<tr><td class="name">${esc(u.email)}</td><td><span class="chip ${u.role==='PENDING'?'warn':'ok'}">${esc(u.role)}</span></td><td>${esc(u.status)}</td>
+    <td><select data-uid="${u.id}" class="roleSelect">
+      ${['PENDING','ADMIN','STORE','QC','PICKER','SUPERVISOR','LINE OPERATOR'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join('')}
+    </select></td></tr>`).join('')}
+  </tbody></table>`;
+
+  document.querySelectorAll('.roleSelect').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await updateDoc(doc(db, "users", sel.dataset.uid), { role: sel.value });
+      alert('Role updated.');
+    });
+  });
+}
+</script>
+</body>
+</html>
