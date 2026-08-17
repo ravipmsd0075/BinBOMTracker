@@ -2,834 +2,980 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#000000">
-<title>PMSD WMS — Phase 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PMSD Picking List</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <style>
   :root{
-    /* Medisys design tokens */
-    --surface-base:#000000; --text-primary:#ffffff; --text-inverse:#005266;
-    --surface-strong:#dfe7e1; --text-tertiary:#212529;
-    --surface-card:#ffffff; --line:#d7ded9;
-    --ok:#1F7A3D; --ok-bg:#E4F3E8; --warn:#B5790A; --warn-bg:#FBF0DC;
-    --danger:#B3261E; --danger-bg:#FBE4E2;
-
-    --radius-xs:5px; --radius-sm:10px; --radius-md:20px;
-    --shadow-1:rgba(0,0,0,.15) 0px 5px 8px 0px;
-
-    --space-1:3px; --space-2:8px; --space-3:10px; --space-4:12px;
-    --space-5:15px; --space-6:16px; --space-7:20px; --space-8:22px;
-
-    --font-xs:12px; --font-sm:16px; --font-md:18px; --font-lg:20px;
-    --font-xl:22px; --font-2xl:24px; --font-3xl:28px; --font-4xl:30px;
-
-    --t-instant:150ms; --t-fast:400ms; --t-normal:500ms; --t-slow:2000ms;
-
-    --font-ui:'Switzer','IBM Plex Sans',system-ui,sans-serif;
-    --font-code:'IBM Plex Mono',ui-monospace,monospace;
-
-    /* legacy aliases kept so existing component code keeps working */
-    --teal-900:#000000; --teal-700:var(--text-inverse); --teal-500:#0A7A94; --teal-100:var(--surface-strong);
-    --white:var(--surface-card); --ink:var(--text-tertiary); --ink-soft:#5B6570; --radius:var(--radius-sm);
+    --bg: #10151b;
+    --panel: #171f27;
+    --panel-2: #1d2732;
+    --line: #2a3542;
+    --ink: #eef2f6;
+    --ink-dim: #9aabbb;
+    --amber: #f5a623;
+    --amber-dim: #7a5716;
+    --green: #33c07a;
+    --green-dim: #12331f;
+    --red: #ef5b5b;
+    --red-dim: #3a1d1d;
+    --radius: 10px;
   }
-  *{box-sizing:border-box;}
-  *:focus-visible{outline:2px solid var(--text-inverse);outline-offset:2px;}
-  body{margin:0;font-family:var(--font-ui);background:var(--surface-strong);color:var(--text-tertiary);-webkit-font-smoothing:antialiased;font-size:var(--font-sm);}
-  header{background:var(--surface-base);color:var(--text-primary);padding:var(--space-4) var(--space-7);position:sticky;top:0;z-index:20;box-shadow:var(--shadow-1);display:flex;justify-content:space-between;align-items:center;animation:fadeIn var(--t-normal) ease;}
-  header .brand{display:flex;align-items:center;gap:var(--space-2);}
-  header .brand .mark{font-family:var(--font-code);font-weight:700;background:var(--text-primary);color:var(--surface-base);padding:2px 7px;border-radius:var(--radius-xs);font-size:var(--font-xs);transition:transform var(--t-fast) ease;}
-  header .brand .mark:hover{transform:rotate(-4deg) scale(1.05);}
-  header .who{font-size:var(--font-xs);color:#B9C4C0;}
-  header button{background:rgba(255,255,255,.12);color:var(--text-primary);border:none;border-radius:var(--radius-xs);padding:7px 12px;font-size:var(--font-xs);cursor:pointer;font-family:var(--font-ui);font-weight:600;transition:background var(--t-instant) ease, transform var(--t-instant) ease;}
-  header button:hover{background:rgba(255,255,255,.22);}
-  header button:active{transform:scale(.95);}
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    padding-bottom: 90px;
+  }
+  ::selection{ background: var(--amber); color:#1a1300; }
 
-  nav{display:flex;overflow-x:auto;background:var(--surface-base);padding:0 var(--space-2);border-top:1px solid rgba(255,255,255,.08);}
-  nav button{background:none;border:none;color:#9AA6A1;padding:var(--space-4) var(--space-5);font-size:var(--font-xs);font-weight:600;white-space:nowrap;cursor:pointer;font-family:var(--font-ui);border-bottom:3px solid transparent;transition:color var(--t-instant) ease, border-color var(--t-fast) ease;}
-  nav button:hover{color:var(--text-primary);}
-  nav button.active{color:var(--text-primary);border-bottom-color:var(--text-inverse);}
+  /* ---- Header ---- */
+  header{
+    position: sticky; top:0; z-index: 20;
+    background: linear-gradient(180deg, #10151b 80%, rgba(16,21,27,0));
+    padding: 18px 16px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+  }
+  .brand .mark{
+    width:34px; height:34px; border-radius:8px;
+    background: repeating-linear-gradient(135deg, var(--amber) 0 4px, #1a1300 4px 8px);
+    flex-shrink:0;
+    position:relative;
+    border: 1px solid #3a2a0a;
+  }
+  .brand .mark::after{
+    content:""; position:absolute; inset:6px;
+    background: var(--bg); border-radius:3px;
+  }
+  .brand h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 17px; margin:0; letter-spacing: 0.2px;
+  }
+  .brand .sub{
+    font-size:11px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace;
+    margin-top:1px;
+  }
+  .stat-strip{
+    display:flex; gap:8px; margin-top:14px; overflow-x:auto; padding-bottom:2px;
+  }
+  .stat{
+    flex: 1 1 0; min-width:84px;
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 8px 10px;
+  }
+  .stat .n{ font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600; line-height:1; }
+  .stat .l{ font-size: 10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.06em; margin-top:4px; }
+  .stat.green .n{ color: var(--green); }
+  .stat.amber .n{ color: var(--amber); }
 
-  @keyframes fadeInUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-  @keyframes popIn{0%{opacity:0;transform:scale(.94);}100%{opacity:1;transform:scale(1);}}
-  @keyframes rowIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
-  @keyframes breathe{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
-  @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;}}
+  /* ---- Tabs ---- */
+  nav.tabs{
+    position: sticky; top: 0; z-index: 19;
+    display:flex; gap:6px; padding: 10px 16px; background:var(--bg);
+    border-bottom: 1px solid var(--line);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    font-family:'Space Grotesk', sans-serif; font-size:13px; font-weight:600;
+    background:transparent; color:var(--ink-dim); border:1px solid var(--line);
+    padding:8px 13px; border-radius: 999px; cursor:pointer; white-space:nowrap;
+    transition: all .15s ease;
+  }
+  nav.tabs button.active{
+    background: var(--amber); color:#1a1300; border-color:var(--amber);
+  }
 
-  main{max-width:900px;margin:0 auto;padding:var(--space-6);padding-bottom:60px;animation:fadeIn var(--t-fast) ease;}
-  .card{background:var(--surface-card);border-radius:var(--radius-sm);padding:var(--space-6);margin-top:var(--space-6);border:1px solid var(--line);animation:fadeInUp var(--t-fast) cubic-bezier(.2,.8,.3,1) both;transition:box-shadow var(--t-fast) ease, transform var(--t-fast) ease;}
-  .card:hover{box-shadow:var(--shadow-1);}
-  .card:nth-of-type(1){animation-delay:0s;}
-  .card:nth-of-type(2){animation-delay:.06s;}
-  .card:nth-of-type(3){animation-delay:.12s;}
-  .card h2{margin:0 0 var(--space-4);font-size:var(--font-lg);font-weight:600;}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);}
-  @media(max-width:520px){.grid{grid-template-columns:1fr;}}
-  .field label{display:block;font-size:var(--font-xs);color:var(--ink-soft);margin-bottom:var(--space-1);font-weight:600;}
-  .field select,.field input{width:100%;padding:var(--space-3);border-radius:var(--radius-xs);border:1px solid var(--line);font-family:var(--font-ui);font-size:var(--font-sm);background:var(--surface-card);transition:border-color var(--t-instant) ease, box-shadow var(--t-instant) ease;}
-  .field select:focus,.field input:focus{outline:none;border-color:var(--text-inverse);box-shadow:0 0 0 3px rgba(0,82,102,.15);}
-  .btn{background:var(--text-inverse);color:var(--text-primary);border:none;border-radius:var(--radius-xs);padding:11px 18px;font-weight:600;font-size:var(--font-sm);cursor:pointer;margin-top:var(--space-4);transition:transform var(--t-instant) ease, box-shadow var(--t-instant) ease, background var(--t-instant) ease;}
-  .btn:hover{box-shadow:var(--shadow-1);}
-  .btn:active{transform:scale(.96);}
-  .btn.secondary{background:var(--surface-strong);color:var(--text-inverse);}
-  .btn.danger{background:var(--danger-bg);color:var(--danger);}
+  main{ padding: 16px; max-width: 640px; margin: 0 auto; }
+  section.view{ display:none; animation: fade .18s ease; }
+  section.view.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
 
-  table{width:100%;border-collapse:collapse;font-size:var(--font-xs);margin-top:var(--space-3);}
-  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);padding:var(--space-2);border-bottom:1px solid var(--line);}
-  tbody tr{animation:rowIn var(--t-fast) ease both;}
-  tbody tr:nth-child(1){animation-delay:.02s;} tbody tr:nth-child(2){animation-delay:.05s;} tbody tr:nth-child(3){animation-delay:.08s;}
-  tbody tr:nth-child(4){animation-delay:.11s;} tbody tr:nth-child(5){animation-delay:.14s;} tbody tr:nth-child(6){animation-delay:.17s;}
-  tbody tr:hover{background:#F6FAF8;}
-  tbody td{padding:var(--space-2);border-bottom:1px solid #EEF2F0;font-family:var(--font-code);transition:background var(--t-instant) ease;}
-  tbody td.name{font-family:var(--font-ui);}
-  .chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:var(--radius-xs);text-transform:uppercase;animation:popIn var(--t-fast) ease both;}
-  .chip.ok{background:var(--ok-bg);color:var(--ok);}
-  .chip.warn{background:var(--warn-bg);color:var(--warn);}
-  .chip.danger{background:var(--danger-bg);color:var(--danger);}
-  .chip.neutral{background:var(--surface-strong);color:var(--ink-soft);}
+  h2.section-title{
+    font-family:'Space Grotesk', sans-serif; font-size:15px; margin: 4px 0 12px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  h2.section-title .count{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim); font-weight:400;
+  }
 
-  .stat-num{font-size:var(--font-4xl);font-weight:700;color:var(--text-inverse);font-family:var(--font-code);display:inline-block;}
-  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);}
-  @media(max-width:520px){.stat-grid{grid-template-columns:1fr;}}
-  .stat-box{display:flex;align-items:center;gap:var(--space-4);background:var(--surface-strong);border-radius:var(--radius-sm);padding:var(--space-5);border:1px solid var(--line);transition:transform var(--t-instant) ease;}
-  .stat-box:hover{transform:translateY(-2px);}
-  .stat-box .icon{width:38px;height:38px;border-radius:var(--radius-xs);background:var(--text-inverse);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .stat-box .icon svg{stroke:var(--text-primary);}
-  .stat-box .lbl{font-size:var(--font-xs);color:var(--ink-soft);margin-top:2px;}
-  tbody tr.critical td:first-child{border-left:3px solid var(--danger);padding-left:6px;}
+  .card{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 12px;
+  }
+  label{ font-size:11px; color: var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:5px; }
+  textarea, input[type=text], input[type=number], select{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:10px 11px; font-size:14px; font-family:'IBM Plex Mono', monospace;
+    outline:none;
+  }
+  textarea:focus, input:focus, select:focus{ border-color: var(--amber); }
+  textarea{ min-height:120px; resize:vertical; }
+  select{ font-family:'Inter',sans-serif; }
 
-  .msg{padding:var(--space-3) var(--space-5);border-radius:var(--radius-xs);font-size:var(--font-xs);margin-top:var(--space-4);animation:popIn var(--t-fast) cubic-bezier(.2,.8,.3,1) both;}
-  .msg.ok{background:var(--ok-bg);color:var(--ok);}
-  .msg.err{background:var(--danger-bg);color:var(--danger);}
+  .btn{
+    font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:13.5px;
+    border-radius:8px; border:1px solid var(--line); padding:11px 16px; cursor:pointer;
+    background: var(--panel-2); color: var(--ink); width:100%;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition: transform .08s ease;
+  }
+  .btn:active{ transform: scale(0.98); }
+  .btn.primary{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
+  .btn.ghost{ background:transparent; }
+  .btn.danger{ color: var(--red); border-color: var(--red-dim); }
+  .btn.sm{ padding:8px 12px; font-size:12.5px; width:auto; }
+  .row{ display:flex; gap:8px; }
+  .row > *{ flex:1; }
 
-  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--space-7);background:var(--surface-base);background-image:linear-gradient(120deg,#000000,#0A2E36,#000000);background-size:200% 200%;animation:breathe var(--t-slow) ease infinite;}
-  .login-card{background:var(--surface-card);border-radius:var(--radius-md);padding:var(--space-8) var(--space-7);max-width:340px;width:100%;box-shadow:var(--shadow-1);animation:popIn var(--t-fast) cubic-bezier(.2,.8,.3,1) both;}
-  .login-card h1{font-size:var(--font-xl);margin:var(--space-2) 0 2px;color:var(--text-inverse);font-weight:700;}
-  .login-card p{font-size:var(--font-xs);color:var(--ink-soft);margin:0 0 var(--space-7);}
-  .hidden{display:none !important;}
-  .row-actions{display:flex;gap:var(--space-2);}
-  .lines-table input{width:100%;padding:6px;font-size:var(--font-xs);border:1px solid var(--line);border-radius:var(--radius-xs);}
-  .add-line-row{margin-top:var(--space-2);}
-  footer{text-align:center;padding:var(--space-7);font-size:11px;color:var(--ink-soft);}
+  /* ---- Pick list table -> card rows ---- */
+  .plist{ display:flex; flex-direction:column; gap:8px; }
+  .prow{
+    background: var(--panel); border:1px solid var(--line); border-left: 4px solid var(--line);
+    border-radius: var(--radius); padding:11px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .prow.done{ border-left-color: var(--green); background: linear-gradient(90deg, var(--green-dim), var(--panel) 30%); }
+  .prow.partial{ border-left-color: var(--amber); }
+  .prow .info{ flex:1; min-width:0; }
+  .prow .code{ font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; }
+  .prow .name{ font-size:12px; color: var(--ink-dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prow .qty{ font-family:'IBM Plex Mono', monospace; text-align:right; flex-shrink:0; }
+  .prow .qty .frac{ font-size:15px; font-weight:600; }
+  .prow .qty .frac .done-n{ color: var(--green); }
+  .prow .qty .frac .partial-n{ color: var(--amber); }
+  .prow .tag{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); }
+  .badge-done{
+    font-size:10px; background: var(--green-dim); color: var(--green); padding:3px 7px; border-radius:5px;
+    font-family:'IBM Plex Mono', monospace; flex-shrink:0;
+  }
+
+  .empty{
+    text-align:center; padding: 40px 20px; color: var(--ink-dim);
+  }
+  .empty .glyph{ font-size:28px; margin-bottom:8px; opacity:.5; }
+  .empty p{ font-size:13px; margin: 4px 0; }
+
+  /* ---- Scanner ---- */
+  #reader{ width:100%; border-radius: var(--radius); overflow:hidden; border:1px solid var(--line); }
+  #reader video{ border-radius: var(--radius); }
+  .scan-frame{
+    position:relative;
+  }
+  .active-bin-chip{
+    display:flex; align-items:center; justify-content:space-between;
+    background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
+    padding: 9px 12px; margin-bottom:12px;
+  }
+  .active-bin-chip .l{ font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+  .active-bin-chip .v{ font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--amber); font-size:14px; }
+
+  /* ---- Confirm sheet ---- */
+  .sheet-backdrop{
+    position:fixed; inset:0; background: rgba(8,10,13,.72); z-index:50;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-backdrop.open{ display:flex; }
+  .sheet{
+    background: var(--panel); border-top:1px solid var(--line); border-radius: 16px 16px 0 0;
+    padding: 18px 16px 20px; width:100%; max-width:640px;
+    animation: up .18s ease;
+  }
+  @keyframes up{ from{ transform:translateY(30px); opacity:0 } to{ transform:none; opacity:1 } }
+  .sheet h3{ font-family:'Space Grotesk',sans-serif; margin:0 0 3px; font-size:16px; }
+  .sheet .meta{ font-size:12px; color:var(--ink-dim); margin-bottom:14px; font-family:'IBM Plex Mono', monospace; }
+  .qty-stepper{ display:flex; align-items:center; gap:10px; }
+  .qty-stepper button{
+    width:42px; height:42px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2);
+    color:var(--ink); font-size:19px; cursor:pointer;
+  }
+  .qty-stepper input{ text-align:center; font-size:18px; font-weight:600; }
+
+  /* ---- toast ---- */
+  #toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background: var(--ink); color:#12161c; padding:11px 18px; border-radius:999px;
+    font-size:13px; font-weight:600; font-family:'Space Grotesk',sans-serif;
+    opacity:0; transition: all .25s ease; z-index:60; pointer-events:none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.green{ background: var(--green); color:#06210f; }
+  #toast.red{ background: var(--red); color:#2a0808; }
+
+  /* ---- bin log ---- */
+  .bin-entry{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 9px 0; border-bottom: 1px solid var(--line); font-size:13px;
+  }
+  .bin-entry:last-child{ border-bottom:none; }
+  .bin-entry .code{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .bin-entry .t{ font-size:10.5px; color:var(--ink-dim); font-family:'IBM Plex Mono', monospace; }
+
+  .foot-actions{
+    display:flex; gap:8px; margin-top: 14px;
+  }
+  .hint{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin-top:8px; }
+  .divider-label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-dim); text-align:center; margin: 12px 0; position:relative; }
+  .divider-label::before, .divider-label::after{ content:""; position:absolute; top:50%; width:38%; height:1px; background:var(--line); }
+  .divider-label::before{ left:0; } .divider-label::after{ right:0; }
+
+  .sync-badge{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:5px 10px;
+    border-radius:999px; white-space:nowrap; flex-shrink:0; align-self:flex-start;
+  }
+  .sync-badge.live{ background: var(--green-dim); color: var(--green); }
+  .sync-badge.connecting{ background: var(--amber-dim); color: var(--amber); }
+  .sync-badge.offline{ background: var(--panel-2); color: var(--ink-dim); }
 </style>
 </head>
 <body>
 
-<div id="loginScreen" class="login-wrap">
-  <div class="login-card">
-    <span class="mark" style="font-family:var(--font-code);font-weight:700;background:var(--teal-700);color:var(--white);padding:2px 7px;border-radius:6px;font-size:12px;">PMSD</span>
-    <h1>Warehouse & Material System</h1>
-    <p>Sign in with your PMSD account</p>
-    <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@pmsd.com"></div>
-    <div class="field" style="margin-top:8px;"><label>Password</label><input type="password" id="loginPassword"></div>
-    <button class="btn" id="loginBtn" style="width:100%;">Sign In</button>
-    <button class="btn secondary" id="registerBtn" style="width:100%;">Create Account</button>
-    <div id="loginMsg"></div>
+<header>
+  <div class="brand">
+    <div class="mark"></div>
+    <div style="flex:1;">
+      <h1>Picking List</h1>
+      <div class="sub">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
+    </div>
+    <div id="syncBadge" class="sync-badge offline">● Local only</div>
+  </div>
+  <div class="stat-strip">
+    <div class="stat"><div class="n" id="statTotal">0</div><div class="l">Total SKU</div></div>
+    <div class="stat green"><div class="n" id="statDone">0</div><div class="l">Picked</div></div>
+    <div class="stat amber"><div class="n" id="statPending">0</div><div class="l">Pending</div></div>
+    <div class="stat"><div class="n" id="statBins">0</div><div class="l">Bins Used</div></div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="active" data-tab="scan">Scan &amp; Pick</button>
+  <button data-tab="list">Pick List</button>
+  <button data-tab="pending">Pending</button>
+  <button data-tab="bin">Bin View</button>
+  <button data-tab="setup">Setup</button>
+</nav>
+
+<main>
+
+  <!-- ===================== SCAN & PICK ===================== -->
+  <section class="view active" id="view-scan">
+    <div class="active-bin-chip">
+      <div>
+        <div class="l">Active Bin</div>
+        <div class="v" id="activeBinLabel">Not set</div>
+      </div>
+      <button class="btn sm ghost" id="btnChangeBin" style="width:auto;">Set Bin</button>
+    </div>
+
+    <div class="card scan-frame">
+      <label>Item scan</label>
+      <div id="reader" style="display:none;"></div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn primary" id="btnStartItemScan">📷 Scan Item</button>
+        <button class="btn ghost" id="btnStopScan" style="display:none;">Stop</button>
+      </div>
+      <div class="divider-label">or enter manually</div>
+      <input type="text" id="manualItemInput" placeholder="Type / scanner-gun input then Enter">
+      <p class="hint">Handheld barcode-gun input works here too — it types into this box and hits Enter automatically.</p>
+    </div>
+  </section>
+
+  <!-- ===================== PICK LIST ===================== -->
+  <section class="view" id="view-list">
+    <h2 class="section-title">Master Pick List <span class="count" id="listCount">0 items</span></h2>
+    <div class="plist" id="pickListContainer"></div>
+  </section>
+
+  <!-- ===================== PENDING ===================== -->
+  <section class="view" id="view-pending">
+    <h2 class="section-title">Pending Items <span class="count" id="pendingCount">0 remaining</span></h2>
+    <div class="plist" id="pendingContainer"></div>
+  </section>
+
+  <!-- ===================== BIN VIEW ===================== -->
+  <section class="view" id="view-bin">
+    <h2 class="section-title">Bin Contents</h2>
+    <div class="card">
+      <label>Select or scan a bin</label>
+      <div class="row">
+        <select id="binSelectView"></select>
+        <button class="btn sm" id="btnScanBinView" style="width:auto;">📷 Scan</button>
+      </div>
+      <div id="readerBin" style="display:none; margin-top:10px;" class="scan-frame"></div>
+    </div>
+    <div class="card" id="binContentsCard">
+      <p class="hint">Select a bin above to view everything logged inside it.</p>
+    </div>
+  </section>
+
+  <!-- ===================== SETUP ===================== -->
+  <section class="view" id="view-setup">
+    <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
+    <div class="card">
+      <label>Session ID (same on every device to share data)</label>
+      <div class="row">
+        <input type="text" id="sessionIdInput" placeholder="e.g. 2026-08-17-run1">
+        <button class="btn sm" id="btnSetSession" style="width:auto;">Join</button>
+      </div>
+      <p class="hint" id="syncHint">Firebase isn't configured in this file yet, so data is saved only on this device. Open the file (index.html) in a text editor, find <code>firebaseConfig</code> near the top of the script, and paste your pmsd-wms project's config there — every device using the same Session ID will then see the same pick list and bin log live.</p>
+    </div>
+
+    <h2 class="section-title">Import Pick List</h2>
+    <div class="card">
+      <label>Import from Excel (.xlsx)</label>
+      <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
+      <button class="btn primary" id="btnPickExcel">📊 Choose Excel File</button>
+      <div id="excelFileName" class="hint"></div>
+      <p class="hint">Expected columns: <b>Item Code</b>, <b>Item Name</b>, <b>Qty Required</b> — in that order, headers in row 1. Download the ready-made template below if you don't have one yet.</p>
+      <a href="pick_list_template.xlsx" download style="text-decoration:none;">
+        <button class="btn ghost sm" style="width:100%; margin-top:6px;">⬇ Download Template (.xlsx)</button>
+      </a>
+    </div>
+
+    <div class="divider-label">or paste manually</div>
+
+    <div class="card">
+      <label>Paste list — Item Code, Item Name, Qty (one per line)</label>
+      <textarea id="pickListInput" placeholder="RM-4501, Hex Bolt M6x20, 50&#10;RM-4502, Washer 6mm, 200&#10;RM-4503, Nut M6, 200"></textarea>
+      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. This replaces the current list.</p>
+      <div class="foot-actions">
+        <button class="btn primary" id="btnImportList">Load List</button>
+        <button class="btn danger sm" id="btnClearList" style="width:auto;">Clear</button>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top:22px;">Bin Master</h2>
+    <div class="card">
+      <label>Known bin IDs (one per line)</label>
+      <textarea id="binListInput" style="min-height:90px;"></textarea>
+      <div class="foot-actions">
+        <button class="btn primary" id="btnSaveBins">Save Bins</button>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top:22px;">Data</h2>
+    <div class="card">
+      <div class="foot-actions">
+        <button class="btn sm" id="btnExportCsv">Export Pick List CSV</button>
+        <button class="btn sm danger" id="btnResetAll">Reset Everything</button>
+      </div>
+      <p class="hint">Without Firebase configured, data is stored only on this device's browser. With Firebase configured (see Sync above), data lives in your pmsd-wms project and syncs across every device on the same Session ID. Host this file on GitHub Pages like your other tools to use it on your phone.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Confirm pick sheet -->
+<div class="sheet-backdrop" id="sheetBackdrop">
+  <div class="sheet">
+    <h3 id="sheetItemName">Item name</h3>
+    <div class="meta" id="sheetItemMeta">CODE &middot; Required 0 &middot; Picked 0</div>
+    <label>Quantity to pick now</label>
+    <div class="qty-stepper">
+      <button id="qtyMinus">−</button>
+      <input type="number" id="qtyInput" value="1">
+      <button id="qtyPlus">+</button>
+    </div>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnCancelPick">Cancel</button>
+      <button class="btn primary" id="btnConfirmPick">Confirm Pick</button>
+    </div>
   </div>
 </div>
 
-<div id="appScreen" class="hidden">
-  <header>
-    <div class="brand"><span class="mark">PMSD</span><span style="font-size:13px;">Warehouse System</span></div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <span class="who" id="whoAmI"></span>
-      <button id="logoutBtn">Sign Out</button>
+<!-- Not found sheet -->
+<div class="sheet-backdrop" id="sheetNotFound">
+  <div class="sheet">
+    <h3>Not in pick list</h3>
+    <div class="meta" id="notFoundCode">CODE</div>
+    <p class="hint">This code doesn't match anything in the master pick list. You can still log it into the active bin, or ignore it and scan again.</p>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnIgnoreScan">Ignore</button>
+      <button class="btn primary" id="btnLogAnyway">Log to Bin Anyway</button>
     </div>
-  </header>
-  <nav id="navBar">
-    <button data-tab="dashboard" class="active">Dashboard</button>
-    <button data-tab="items">Item Master</button>
-    <button data-tab="locations">Locations</button>
-    <button data-tab="grn">GRN / Inward</button>
-    <button data-tab="qc">QC</button>
-    <button data-tab="bom">BOM</button>
-    <button data-tab="prodorders">Production Orders</button>
-    <button data-tab="picklist">Pick Lists</button>
-    <button data-tab="stock">Stock Ledger</button>
-    <button data-tab="users">Users</button>
-  </nav>
-  <main id="mainArea"></main>
+  </div>
 </div>
 
-<footer>PMSD WMS · Phase 1 (Item Master, Location Master, GRN, QC, Stock Ledger)</footer>
+<div id="toast"></div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import {
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import {
-  getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-// ====================================================================
-// PASTE YOUR FIREBASE CONFIG HERE (from Firebase console → Project settings)
-// ====================================================================
+<script>
+/* =================================================================
+   FIREBASE CONFIG — paste your pmsd-wms project's config here.
+   Firebase Console > Project settings > General > Your apps > SDK setup.
+   Leave as-is to keep the app in local-only (single device) mode.
+   ================================================================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyDkH-UzC7cdpfHu_j-FSHNJ5kXChzubdD8",
-  authDomain: "pmsd-wms.firebaseapp.com",
-  projectId: "pmsd-wms",
-  storageBucket: "pmsd-wms.firebasestorage.app",
-  messagingSenderId: "977169799353",
-  appId: "1:977169799353:web:b6fafd2d03c87ca22fe368",
-  measurementId: "G-9KDNB1HQJG"
+  apiKey: "AIzaSyCfUmCJqvmEcl_C7ChUURA-VxZa_yfJOdw",
+  authDomain: "pmsd-ims.firebaseapp.com",
+  projectId: "pmsd-ims",
+  storageBucket: "pmsd-ims.firebasestorage.app",
+  messagingSenderId: "68646491760",
+  appId: "1:68646491760:web:32d174a0cd66c8de5186b5"
+};
+const FIREBASE_ENABLED = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+/* ---------------- Local storage helpers ---------------- */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const DEFAULT_BINS = [
+  "RM-S644-B001","RM-S644-B002","RM-S644-B003","RM-S644-B004",
+  "RM-S531-B005","RM-S531-B006","RM-S531-B007","RM-S531-B008","RM-S531-B009","RM-S531-B010","RM-S531-B011","RM-S531-B012","RM-S531-B013","RM-S531-B014",
+  "RM-S439-B015","RM-S439-B016","RM-S439-B017","RM-S439-B018","RM-S439-B019","RM-S439-B020","RM-S439-B021","RM-S439-B022","RM-S439-B023","RM-S439-B024",
+  "RM-SPT-B025","RM-SPT-B026","RM-SPT-B027",
+  "RM-S531-B028",
+  "RM-SDB-B029","RM-SDB-B030"
+];
 
-let currentUser = null;
-let currentRole = "PENDING";
-let itemsCache = [];
-let locationsCache = [];
+let pickList = LS.get('wms_pick_list', []);
+let bins = LS.get('wms_bins', DEFAULT_BINS);
+let binLog = LS.get('wms_bin_log', {});
+let activeBin = LS.get('wms_active_bin', null);
+let sessionId = LS.get('wms_session_id', 'default');
 
-// ---------------- Auth ----------------
-document.getElementById('loginBtn').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pw = document.getElementById('loginPassword').value;
-  const msg = document.getElementById('loginMsg');
-  try {
-    await signInWithEmailAndPassword(auth, email, pw);
-  } catch (err) {
-    msg.innerHTML = `<div class="msg err">${err.message}</div>`;
-  }
-});
+/* ---------------- Sync badge ---------------- */
+function setSyncBadge(state, text){
+  const el = document.getElementById('syncBadge');
+  el.className = 'sync-badge ' + state;
+  el.textContent = '● ' + text;
+  document.getElementById('syncStatusText').textContent = text;
+}
 
-document.getElementById('registerBtn').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pw = document.getElementById('loginPassword').value;
-  const msg = document.getElementById('loginMsg');
-  if (!email || pw.length < 6) {
-    msg.innerHTML = `<div class="msg err">Enter an email and a password of at least 6 characters.</div>`;
+/* ---------------- Firestore layer ---------------- */
+let db = null, fbReady = false, unsubscribeDoc = null;
+
+function sessionDocRef(){
+  return db.collection('pmsd_picking_sessions').doc(sessionId);
+}
+
+function initFirebase(){
+  document.getElementById('sessionIdInput').value = sessionId;
+  if(!FIREBASE_ENABLED){
+    setSyncBadge('offline', 'Local only');
+    saveAllLocal();
     return;
   }
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, pw);
-    await setDoc(doc(db, "users", cred.user.uid), {
-      email, role: "PENDING", status: "ACTIVE", createdAt: serverTimestamp()
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    setSyncBadge('connecting', 'Connecting…');
+    firebase.auth().signInAnonymously().then(()=>{
+      fbReady = true;
+      document.getElementById('syncHint').textContent =
+        'Connected. Every device using the same Session ID above sees this pick list and bin log live.';
+      attachFirestoreListener();
+    }).catch(err=>{
+      setSyncBadge('offline', 'Auth failed');
+      toast('Firebase auth failed — check console', 'red');
+      console.error(err);
     });
-    msg.innerHTML = `<div class="msg ok">Account created. An Admin needs to assign your role in the Users tab before you get full access.</div>`;
-  } catch (err) {
-    msg.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }catch(err){
+    setSyncBadge('offline', 'Config error');
+    console.error(err);
   }
-});
+}
 
-document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+function attachFirestoreListener(){
+  if(unsubscribeDoc) unsubscribeDoc();
+  setSyncBadge('connecting', 'Syncing…');
+  unsubscribeDoc = sessionDocRef().onSnapshot(snap=>{
+    setSyncBadge('live', 'Live · ' + sessionId);
+    const data = snap.exists ? snap.data() : {};
+    pickList = data.pickList || [];
+    bins = (data.bins && data.bins.length) ? data.bins : DEFAULT_BINS;
+    binLog = data.binLog || {};
+    renderCurrentView();
+    refreshStats();
+  }, err=>{
+    setSyncBadge('offline', 'Sync error');
+    console.error(err);
+  });
+}
 
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
-    const udoc = await getDoc(doc(db, "users", user.uid));
-    currentRole = udoc.exists() ? udoc.data().role : "PENDING";
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('appScreen').classList.remove('hidden');
-    document.getElementById('whoAmI').textContent = `${user.email} · ${currentRole}`;
-    await preloadMasters();
-    renderTab('dashboard');
+document.getElementById('btnSetSession').addEventListener('click', ()=>{
+  const val = document.getElementById('sessionIdInput').value.trim();
+  if(!val){ toast('Enter a session ID', 'red'); return; }
+  sessionId = val;
+  LS.set('wms_session_id', sessionId);
+  if(FIREBASE_ENABLED && fbReady){
+    attachFirestoreListener();
+    toast('Joined session: ' + sessionId, 'green');
   } else {
-    currentUser = null;
-    document.getElementById('loginScreen').classList.remove('hidden');
-    document.getElementById('appScreen').classList.add('hidden');
+    toast('Local mode — session ID has no effect until Firebase is configured', 'red');
   }
 });
 
-// ---------------- Nav ----------------
-document.getElementById('navBar').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-tab]');
-  if (!btn) return;
-  document.querySelectorAll('#navBar button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderTab(btn.dataset.tab);
+function renderCurrentView(){
+  const activeTab = document.querySelector('nav.tabs button.active').dataset.tab;
+  if(activeTab === 'list') renderPickList();
+  if(activeTab === 'pending') renderPending();
+  if(activeTab === 'bin') renderBinSelect();
+  renderPickList(); // keep stats/list fresh even off-tab
+}
+
+/* ---------------- Unified write operations ---------------- */
+function saveAllLocal(){
+  LS.set('wms_pick_list', pickList);
+  LS.set('wms_bins', bins);
+  LS.set('wms_bin_log', binLog);
+  LS.set('wms_active_bin', activeBin);
+}
+
+// Bulk overwrite (import list / save bins / clear / reset)
+function persistBulk(patch){
+  if(patch.pickList !== undefined) pickList = patch.pickList;
+  if(patch.bins !== undefined) bins = patch.bins;
+  if(patch.binLog !== undefined) binLog = patch.binLog;
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, bins, binLog }, { merge: true }).catch(err=>{
+      toast('Save failed — check connection', 'red'); console.error(err);
+    });
+  } else {
+    saveAllLocal();
+  }
+}
+
+// Atomic pick confirmation (transaction when online, direct mutation when local)
+function persistPick(code, qty, bin, itemNameForLog){
+  const logEntry = { code, name: itemNameForLog || '', qty, ts: new Date().toISOString() };
+  if(FIREBASE_ENABLED && fbReady){
+    const ref = sessionDocRef();
+    db.runTransaction(tx => tx.get(ref).then(doc=>{
+      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+      const list = data.pickList || [];
+      const idx = list.findIndex(i => i.code.toLowerCase() === code.toLowerCase());
+      if(idx === -1) return; // item vanished — ignore
+      const remaining = list[idx].qtyReq - list[idx].qtyPicked;
+      const applyQty = Math.max(0, Math.min(qty, remaining));
+      list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
+      const log = data.binLog || {};
+      if(!log[bin]) log[bin] = [];
+      log[bin] = [...log[bin], logEntry];
+      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+    })).catch(err=>{ toast('Pick sync failed', 'red'); console.error(err); });
+  } else {
+    const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+    if(item){
+      const remaining = item.qtyReq - item.qtyPicked;
+      const applyQty = Math.max(0, Math.min(qty, remaining));
+      item.qtyPicked += applyQty;
+    }
+    if(!binLog[bin]) binLog[bin] = [];
+    binLog[bin].push(logEntry);
+    saveAllLocal();
+    renderCurrentView();
+    refreshStats();
+  }
+}
+
+// Log an unmatched scan straight to a bin (no pick-list item to update)
+function persistBinOnlyLog(bin, code, name, qty){
+  const logEntry = { code, name, qty, ts: new Date().toISOString() };
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({
+      binLog: { [bin]: firebase.firestore.FieldValue.arrayUnion(logEntry) }
+    }, { merge: true }).catch(err=>{ toast('Sync failed', 'red'); console.error(err); });
+  } else {
+    if(!binLog[bin]) binLog[bin] = [];
+    binLog[bin].push(logEntry);
+    saveAllLocal();
+    refreshStats();
+  }
+}
+
+/* ---------------- Toast ---------------- */
+let toastTimer;
+function toast(msg, kind){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (kind ? ' '+kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.className = '', 1800);
+  if(navigator.vibrate){ navigator.vibrate(kind === 'red' ? [60,40,60] : 40); }
+}
+
+/* ---------------- Tabs ---------------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'list') renderPickList();
+    if(btn.dataset.tab === 'pending') renderPending();
+    if(btn.dataset.tab === 'bin') renderBinSelect();
+    if(btn.dataset.tab === 'setup') renderSetup();
+    stopAllScanners();
+  });
 });
 
-async function preloadMasters() {
-  const itemsSnap = await getDocs(collection(db, "items"));
-  itemsCache = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const locSnap = await getDocs(collection(db, "locations"));
-  locationsCache = locSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+/* ---------------- Stats ---------------- */
+function refreshStats(){
+  const total = pickList.length;
+  const done = pickList.filter(i=>i.qtyPicked >= i.qtyReq).length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statPending').textContent = total - done;
+  document.getElementById('statBins').textContent = Object.keys(binLog).filter(b => binLog[b] && binLog[b].length).length;
 }
 
-function renderTab(tab) {
-  const main = document.getElementById('mainArea');
-  if (tab === 'dashboard') return renderDashboard(main);
-  if (tab === 'items') return renderItems(main);
-  if (tab === 'locations') return renderLocations(main);
-  if (tab === 'grn') return renderGRN(main);
-  if (tab === 'qc') return renderQC(main);
-  if (tab === 'bom') return renderBOM(main);
-  if (tab === 'prodorders') return renderProductionOrders(main);
-  if (tab === 'picklist') return renderPickLists(main);
-  if (tab === 'stock') return renderStock(main);
-  if (tab === 'users') return renderUsers(main);
-}
-
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-function fmtDate(ts) {
-  try {
-    const d = ts?.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
-  } catch (e) { return ''; }
-}
-
-// ---------------- Dashboard ----------------
-async function renderDashboard(main) {
-  main.innerHTML = `<div class="card"><h2>Dashboard</h2><div id="dashStats">Loading…</div></div>`;
-  const ledgerSnap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(10)));
-  const lowStock = await computeLowStock();
-
-  let html = `<div class="stat-grid">
-    <div class="stat-box">
-      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-      <div><span class="stat-num" data-count="${itemsCache.length}">0</span><div class="lbl">Items in Master</div></div>
+/* ---------------- Pick list rendering ---------------- */
+function pickRowHtml(item){
+  const isDone = item.qtyPicked >= item.qtyReq;
+  const isPartial = item.qtyPicked > 0 && !isDone;
+  const cls = isDone ? 'done' : (isPartial ? 'partial' : '');
+  return `<div class="prow ${cls}">
+    <div class="info">
+      <div class="code">${escapeHtml(item.code)}</div>
+      <div class="name">${escapeHtml(item.name || '')}</div>
     </div>
-    <div class="stat-box">
-      <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></div>
-      <div><span class="stat-num" data-count="${locationsCache.length}">0</span><div class="lbl">Locations</div></div>
+    <div class="qty">
+      <div class="frac"><span class="${isDone?'done-n':(isPartial?'partial-n':'')}">${item.qtyPicked}</span> / ${item.qtyReq}</div>
+      <div class="tag">${isDone ? 'complete' : 'qty'}</div>
     </div>
-  </div>
-  <h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Low / Critical Stock</h3>`;
-  html += lowStock.length === 0
-    ? `<p style="font-size:13px;color:var(--ink-soft);">Nothing below minimum stock right now.</p>`
-    : `<table><thead><tr><th>Item</th><th>Current</th><th>Min</th></tr></thead><tbody>
-        ${lowStock.map(x => `<tr class="${x.current <= 0 ? 'critical' : ''}"><td class="name">${esc(x.itemName)}</td><td>${x.current}</td><td>${x.min}</td></tr>`).join('')}
-      </tbody></table>`;
-
-  html += `<h3 style="margin-top:20px;font-size:13px;color:var(--ink-soft);text-transform:uppercase;">Recent Activity</h3>`;
-  const rows = ledgerSnap.docs.map(d => d.data());
-  html += rows.length === 0
-    ? `<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>`
-    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td>${esc(r.txnType)}</td><td>${esc(r.itemCode)}</td><td>${r.qty}</td></tr>`).join('')}
-      </tbody></table>`;
-
-  document.getElementById('dashStats').innerHTML = html;
-  animateCounters();
-}
-
-function animateCounters() {
-  document.querySelectorAll('.stat-num[data-count]').forEach(el => {
-    const target = Number(el.dataset.count) || 0;
-    const duration = 600;
-    const start = performance.now();
-    function tick(now) {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      el.textContent = Math.round(eased * target);
-      if (progress < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  });
-}
-
-async function computeLowStock() {
-  const ledgerSnap = await getDocs(collection(db, "stockLedger"));
-  const totals = {};
-  ledgerSnap.docs.forEach(d => {
-    const r = d.data();
-    totals[r.itemCode] = (totals[r.itemCode] || 0) + (Number(r.qty) || 0);
-  });
-  return itemsCache
-    .filter(i => i.minStock && (totals[i.id] || 0) < Number(i.minStock))
-    .map(i => ({ itemName: i.itemName, current: totals[i.id] || 0, min: i.minStock }));
-}
-
-// ---------------- Item Master ----------------
-function renderItems(main) {
-  main.innerHTML = `
-  <div class="card">
-    <h2>Add Item</h2>
-    <div class="grid">
-      <div class="field"><label>Item Code</label><input id="itCode"></div>
-      <div class="field"><label>Item Name</label><input id="itName"></div>
-      <div class="field"><label>Category</label>
-        <select id="itCategory"><option>Raw Material</option><option>Component</option><option>Packing</option><option>Finished Goods</option></select>
-      </div>
-      <div class="field"><label>UOM</label><input id="itUOM" placeholder="PCS / Kg / Roll"></div>
-      <div class="field"><label>Min Stock</label><input id="itMin" type="number"></div>
-      <div class="field"><label>Max Stock</label><input id="itMax" type="number"></div>
-      <div class="field"><label>Batch Tracked?</label><select id="itBatch"><option value="N">No</option><option value="Y">Yes</option></select></div>
-      <div class="field"><label>Barcode</label><input id="itBarcode"></div>
-    </div>
-    <button class="btn" id="saveItemBtn">Save Item</button>
-    <div id="itemMsg"></div>
-  </div>
-  <div class="card"><h2>Item List (${itemsCache.length})</h2>
-    <table><thead><tr><th>Code</th><th>Name</th><th>UOM</th><th>Min</th><th>Status</th></tr></thead>
-    <tbody>${itemsCache.map(i => `<tr><td>${esc(i.id)}</td><td class="name">${esc(i.itemName)}</td><td>${esc(i.uom)}</td><td>${i.minStock ?? ''}</td><td><span class="chip ok">${esc(i.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
+    ${isDone ? '<div class="badge-done">✓ DONE</div>' : ''}
   </div>`;
-
-  document.getElementById('saveItemBtn').addEventListener('click', async () => {
-    const code = document.getElementById('itCode').value.trim();
-    if (!code) { alert('Item Code is required.'); return; }
-    await setDoc(doc(db, "items", code), {
-      itemName: document.getElementById('itName').value.trim(),
-      category: document.getElementById('itCategory').value,
-      uom: document.getElementById('itUOM').value.trim(),
-      minStock: Number(document.getElementById('itMin').value) || 0,
-      maxStock: Number(document.getElementById('itMax').value) || 0,
-      batchTracked: document.getElementById('itBatch').value,
-      barcode: document.getElementById('itBarcode').value.trim(),
-      status: "ACTIVE"
-    });
-    await preloadMasters();
-    document.getElementById('itemMsg').innerHTML = `<div class="msg ok">Saved: ${esc(code)}</div>`;
-    renderItems(main);
-  });
 }
 
-// ---------------- Location Master ----------------
-function renderLocations(main) {
-  main.innerHTML = `
-  <div class="card">
-    <h2>Add Location</h2>
-    <div class="grid">
-      <div class="field"><label>Location ID</label><input id="locId" placeholder="RM-A01-R2-P03"></div>
-      <div class="field"><label>Zone</label>
-        <select id="locZone"><option>RAW MATERIAL</option><option>WIP</option><option>FINISHED GOODS</option><option>QC-HOLD</option></select>
-      </div>
-      <div class="field"><label>Rack</label><input id="locRack"></div>
-      <div class="field"><label>Row</label><input id="locRow"></div>
-      <div class="field"><label>Position/Bin</label><input id="locPos"></div>
-      <div class="field"><label>Type</label>
-        <select id="locType"><option>STORAGE</option><option>QC-HOLD</option><option>TRANSFER-BIN</option><option>LINE-SIDE</option></select>
-      </div>
-    </div>
-    <button class="btn" id="saveLocBtn">Save Location</button>
-    <div id="locMsg"></div>
-  </div>
-  <div class="card"><h2>Locations (${locationsCache.length})</h2>
-    <table><thead><tr><th>ID</th><th>Zone</th><th>Type</th><th>Status</th></tr></thead>
-    <tbody>${locationsCache.map(l => `<tr><td>${esc(l.id)}</td><td class="name">${esc(l.zone)}</td><td>${esc(l.locationType)}</td><td><span class="chip ok">${esc(l.status || 'ACTIVE')}</span></td></tr>`).join('')}</tbody></table>
-  </div>`;
-
-  document.getElementById('saveLocBtn').addEventListener('click', async () => {
-    const id = document.getElementById('locId').value.trim();
-    if (!id) { alert('Location ID is required.'); return; }
-    await setDoc(doc(db, "locations", id), {
-      zone: document.getElementById('locZone').value,
-      rack: document.getElementById('locRack').value.trim(),
-      row: document.getElementById('locRow').value.trim(),
-      position: document.getElementById('locPos').value.trim(),
-      locationType: document.getElementById('locType').value,
-      status: "ACTIVE"
-    });
-    await preloadMasters();
-    document.getElementById('locMsg').innerHTML = `<div class="msg ok">Saved: ${esc(id)}</div>`;
-    renderLocations(main);
-  });
-}
-
-// ---------------- GRN ----------------
-let grnLines = [];
-
-function renderGRN(main) {
-  grnLines = [];
-  main.innerHTML = `
-  <div class="card">
-    <h2>New GRN (Material Inward)</h2>
-    <div class="grid">
-      <div class="field"><label>GRN No.</label><input id="grnNo" placeholder="auto if left blank"></div>
-      <div class="field"><label>PO Reference</label><input id="grnPO"></div>
-      <div class="field"><label>Vendor Name</label><input id="grnVendor"></div>
-      <div class="field"><label>GRN Date</label><input id="grnDate" type="date"></div>
-    </div>
-
-    <h3 style="margin-top:16px;font-size:13px;">Add Line Item</h3>
-    <div class="grid">
-      <div class="field"><label>Item</label>
-        <select id="grnItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Qty</label><input id="grnQty" type="number" min="1"></div>
-      <div class="field"><label>Batch No (if applicable)</label><input id="grnBatch"></div>
-    </div>
-    <button class="btn secondary" id="addLineBtn">+ Add Line</button>
-
-    <table class="lines-table"><thead><tr><th>Item</th><th>Qty</th><th>Batch</th><th></th></tr></thead>
-    <tbody id="grnLinesBody"></tbody></table>
-
-    <button class="btn" id="saveGrnBtn">Create GRN</button>
-    <div id="grnMsg"></div>
-  </div>
-  <div class="card"><h2>Recent GRNs</h2><div id="grnList">Loading…</div></div>`;
-
-  document.getElementById('grnDate').value = new Date().toISOString().slice(0,10);
-
-  document.getElementById('addLineBtn').addEventListener('click', () => {
-    const code = document.getElementById('grnItemSel').value;
-    const qty = Number(document.getElementById('grnQty').value);
-    const batch = document.getElementById('grnBatch').value.trim();
-    if (!code || !qty) { alert('Select an item and enter a quantity.'); return; }
-    const item = itemsCache.find(i => i.id === code);
-    grnLines.push({ itemCode: code, itemName: item?.itemName || '', receivedQty: qty, batchNo: batch, qcStatus: 'PENDING' });
-    document.getElementById('grnQty').value = '';
-    document.getElementById('grnBatch').value = '';
-    renderGrnLines();
-  });
-
-  renderGrnLines();
-  loadRecentGRNs();
-
-  document.getElementById('saveGrnBtn').addEventListener('click', async () => {
-    if (grnLines.length === 0) { alert('Add at least one line item.'); return; }
-    const grnNo = document.getElementById('grnNo').value.trim() || ('GRN-' + Date.now());
-    await setDoc(doc(db, "grn", grnNo), {
-      poRef: document.getElementById('grnPO').value.trim(),
-      vendorName: document.getElementById('grnVendor').value.trim(),
-      grnDate: document.getElementById('grnDate').value,
-      status: 'PENDING QC',
-      createdBy: currentUser.email,
-      createdAt: serverTimestamp(),
-      lines: grnLines
-    });
-    document.getElementById('grnMsg').innerHTML = `<div class="msg ok">GRN created: ${esc(grnNo)}. Now goes to QC.</div>`;
-    grnLines = [];
-    renderGrnLines();
-    loadRecentGRNs();
-  });
-}
-
-function renderGrnLines() {
-  document.getElementById('grnLinesBody').innerHTML = grnLines.map((l, idx) => `
-    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.receivedQty}</td><td>${esc(l.batchNo)}</td>
-    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
-  `).join('') || '<tr><td colspan="4" style="color:var(--ink-soft);">No lines added yet.</td></tr>';
-  document.querySelectorAll('#grnLinesBody button[data-idx]').forEach(b => {
-    b.addEventListener('click', () => { grnLines.splice(Number(b.dataset.idx), 1); renderGrnLines(); });
-  });
-}
-
-async function loadRecentGRNs() {
-  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc"), limit(10)));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('grnList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No GRNs yet.</p>'
-    : `<table><thead><tr><th>GRN No</th><th>Vendor</th><th>Lines</th><th>Status</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.vendorName)}</td><td>${(r.lines||[]).length}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
-      </tbody></table>`;
-}
-
-// ---------------- QC ----------------
-async function renderQC(main) {
-  main.innerHTML = `<div class="card"><h2>Pending QC</h2><div id="qcList">Loading…</div></div>`;
-  const snap = await getDocs(query(collection(db, "grn"), orderBy("createdAt", "desc")));
-  const pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(g => g.status === 'PENDING QC');
-
-  if (pending.length === 0) {
-    document.getElementById('qcList').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Nothing pending QC.</p>';
+function renderPickList(){
+  const c = document.getElementById('pickListContainer');
+  document.getElementById('listCount').textContent = pickList.length + ' items';
+  if(!pickList.length){
+    c.innerHTML = emptyHtml('📋','No pick list loaded','Go to Setup tab and paste your list.');
     return;
   }
+  c.innerHTML = pickList.map(pickRowHtml).join('');
+  refreshStats();
+}
 
-  let html = '';
-  pending.forEach(g => {
-    html += `<div class="card" style="margin-top:10px;border-color:var(--warn);">
-      <b>${esc(g.id)}</b> · ${esc(g.vendorName)} · ${esc(g.grnDate)}
-      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Received</th><th>Accept</th><th>Reject</th></tr></thead>
-      <tbody>${(g.lines||[]).map((l, i) => `
-        <tr>
-          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
-          <td>${l.receivedQty}</td>
-          <td><input type="number" min="0" max="${l.receivedQty}" class="qcAccept" data-grn="${esc(g.id)}" data-idx="${i}" value="${l.receivedQty}"></td>
-          <td><input type="number" min="0" value="0" class="qcReject" data-grn="${esc(g.id)}" data-idx="${i}"></td>
-        </tr>`).join('')}</tbody></table>
-      <button class="btn" data-qc-submit="${esc(g.id)}">Submit QC & Update Stock</button>
-    </div>`;
-  });
-  document.getElementById('qcList').innerHTML = html;
+function renderPending(){
+  const c = document.getElementById('pendingContainer');
+  const pending = pickList.filter(i => i.qtyPicked < i.qtyReq);
+  document.getElementById('pendingCount').textContent = pending.length + ' remaining';
+  if(!pending.length){
+    c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item on the list has been fully picked.' : 'Load a pick list first.');
+    return;
+  }
+  c.innerHTML = pending.map(pickRowHtml).join('');
+}
 
-  document.querySelectorAll('[data-qc-submit]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const grnNo = btn.dataset.qcSubmit;
-      const g = pending.find(x => x.id === grnNo);
-      const updatedLines = g.lines.map((l, i) => {
-        const acc = Number(document.querySelector(`.qcAccept[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
-        const rej = Number(document.querySelector(`.qcReject[data-grn="${grnNo}"][data-idx="${i}"]`).value) || 0;
-        return { ...l, acceptedQty: acc, rejectedQty: rej, qcStatus: rej > 0 ? (acc > 0 ? 'PARTIAL' : 'FAIL') : 'PASS' };
-      });
+function emptyHtml(glyph, title, sub){
+  return `<div class="empty"><div class="glyph">${glyph}</div><p style="font-weight:600;color:var(--ink)">${title}</p><p>${sub}</p></div>`;
+}
 
-      await updateDoc(doc(db, "grn", grnNo), { status: 'COMPLETED', lines: updatedLines, qcBy: currentUser.email, qcAt: serverTimestamp() });
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-      for (const l of updatedLines) {
-        if (l.acceptedQty > 0) {
-          await addDoc(collection(db, "stockLedger"), {
-            dateTime: serverTimestamp(), txnType: 'GRN-IN', itemCode: l.itemCode, batchNo: l.batchNo || '',
-            qty: l.acceptedQty, fromLocation: '', toLocation: 'QC-HOLD', refNo: grnNo, user: currentUser.email,
-            remarks: `QC ${l.qcStatus}`
-          });
-        }
+/* ---------------- Setup ---------------- */
+function renderSetup(){
+  document.getElementById('binListInput').value = bins.join('\n');
+}
+
+document.getElementById('btnImportList').addEventListener('click', ()=>{
+  const raw = document.getElementById('pickListInput').value.trim();
+  if(!raw){ toast('Paste a list first', 'red'); return; }
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const parsed = lines.map(line=>{
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const code = (parts[0]||'').trim();
+    const name = (parts[1]||'').trim();
+    const qty = parseFloat((parts[2]||'1').trim()) || 1;
+    return { code, name, qtyReq: qty, qtyPicked: 0 };
+  }).filter(i=>i.code);
+  if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
+  persistBulk({ pickList: parsed, binLog: {} });
+  document.getElementById('pickListInput').value = '';
+  toast(parsed.length + ' items loaded', 'green');
+  renderPickList();
+});
+
+document.getElementById('btnPickExcel').addEventListener('click', ()=>{
+  document.getElementById('excelFileInput').click();
+});
+
+document.getElementById('excelFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('excelFileName').textContent = 'Reading ' + file.name + ' …';
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('pick')) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      // skip header row (row 0) if first cell looks like a header word
+      let startRow = 0;
+      if(rows.length && String(rows[0][0]).toLowerCase().includes('item') ) startRow = 1;
+      const parsed = [];
+      for(let i = startRow; i < rows.length; i++){
+        const r = rows[i];
+        const code = String(r[0] ?? '').trim();
+        const name = String(r[1] ?? '').trim();
+        const qty = parseFloat(r[2]) || 0;
+        if(!code) continue;
+        parsed.push({ code, name, qtyReq: qty || 1, qtyPicked: 0 });
       }
-      renderQC(main);
-    });
-  });
-}
-
-// ---------------- Helpers: current stock per item/location ----------------
-async function computeStockByItemLocation() {
-  const snap = await getDocs(collection(db, "stockLedger"));
-  const map = {}; // itemCode -> { locationId: qty }
-  snap.docs.forEach(d => {
-    const r = d.data();
-    if (!map[r.itemCode]) map[r.itemCode] = {};
-    if (r.toLocation) map[r.itemCode][r.toLocation] = (map[r.itemCode][r.toLocation] || 0) + (Number(r.qty) || 0);
-    if (r.fromLocation) map[r.itemCode][r.fromLocation] = (map[r.itemCode][r.fromLocation] || 0) - (Number(r.qty) || 0);
-  });
-  return map;
-}
-function bestLocationFor(stockMap, itemCode) {
-  const locs = stockMap[itemCode];
-  if (!locs) return '';
-  let best = '', bestQty = -Infinity;
-  Object.keys(locs).forEach(loc => { if (locs[loc] > bestQty) { bestQty = locs[loc]; best = loc; } });
-  return bestQty > 0 ? best : '';
-}
-
-// ---------------- BOM Management ----------------
-let bomLines = [];
-
-async function renderBOM(main) {
-  bomLines = [];
-  main.innerHTML = `
-  <div class="card">
-    <h2>Define / Update BOM</h2>
-    <div class="grid">
-      <div class="field"><label>Product Code</label><input id="bomProduct" placeholder="e.g. FG-COOLER-01"></div>
-      <div class="field"><label>Product Name</label><input id="bomProductName"></div>
-    </div>
-
-    <h3 style="margin-top:16px;font-size:13px;">Add Component</h3>
-    <div class="grid">
-      <div class="field"><label>Component Item</label>
-        <select id="bomItemSel"><option value="">-- Select --</option>${itemsCache.map(i => `<option value="${esc(i.id)}">${esc(i.id)} — ${esc(i.itemName)}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Qty per Unit</label><input id="bomQtyPer" type="number" min="0.001" step="0.001"></div>
-    </div>
-    <button class="btn secondary" id="addBomLineBtn">+ Add Component</button>
-
-    <table class="lines-table"><thead><tr><th>Item</th><th>Qty/Unit</th><th></th></tr></thead>
-    <tbody id="bomLinesBody"></tbody></table>
-
-    <button class="btn" id="saveBomBtn">Save BOM</button>
-    <div id="bomMsg"></div>
-  </div>
-  <div class="card"><h2>Existing BOMs</h2><div id="bomList">Loading…</div></div>`;
-
-  renderBomLines();
-  loadBomList();
-
-  document.getElementById('addBomLineBtn').addEventListener('click', () => {
-    const code = document.getElementById('bomItemSel').value;
-    const qty = Number(document.getElementById('bomQtyPer').value);
-    if (!code || !qty) { alert('Select a component and enter qty per unit.'); return; }
-    const item = itemsCache.find(i => i.id === code);
-    bomLines.push({ itemCode: code, itemName: item?.itemName || '', qtyPerUnit: qty, uom: item?.uom || '' });
-    document.getElementById('bomQtyPer').value = '';
-    renderBomLines();
-  });
-
-  document.getElementById('saveBomBtn').addEventListener('click', async () => {
-    const product = document.getElementById('bomProduct').value.trim();
-    if (!product) { alert('Enter a Product Code.'); return; }
-    if (bomLines.length === 0) { alert('Add at least one component.'); return; }
-    await setDoc(doc(db, "bom", product), {
-      productName: document.getElementById('bomProductName').value.trim(),
-      components: bomLines,
-      updatedBy: currentUser.email,
-      updatedAt: serverTimestamp()
-    });
-    document.getElementById('bomMsg').innerHTML = `<div class="msg ok">BOM saved for ${esc(product)}.</div>`;
-    bomLines = [];
-    renderBomLines();
-    loadBomList();
-  });
-}
-
-function renderBomLines() {
-  document.getElementById('bomLinesBody').innerHTML = bomLines.map((l, idx) => `
-    <tr><td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td><td>${l.qtyPerUnit} ${esc(l.uom)}</td>
-    <td><button class="btn danger" style="padding:4px 8px;margin:0;font-size:11px;" data-idx="${idx}">✕</button></td></tr>
-  `).join('') || '<tr><td colspan="3" style="color:var(--ink-soft);">No components added yet.</td></tr>';
-  document.querySelectorAll('#bomLinesBody button[data-idx]').forEach(b => {
-    b.addEventListener('click', () => { bomLines.splice(Number(b.dataset.idx), 1); renderBomLines(); });
-  });
-}
-
-async function loadBomList() {
-  const snap = await getDocs(collection(db, "bom"));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('bomList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No BOMs defined yet.</p>'
-    : `<table><thead><tr><th>Product</th><th>Name</th><th>Components</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.productName)}</td><td>${(r.components||[]).length}</td></tr>`).join('')}
-      </tbody></table>`;
-}
-
-// ---------------- Production Orders + Auto Pick List ----------------
-async function renderProductionOrders(main) {
-  const bomSnap = await getDocs(collection(db, "bom"));
-  const bomList = bomSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  main.innerHTML = `
-  <div class="card">
-    <h2>New Production Order</h2>
-    <div class="grid">
-      <div class="field"><label>Order No.</label><input id="poNo" placeholder="auto if left blank"></div>
-      <div class="field"><label>Product (BOM)</label>
-        <select id="poProduct"><option value="">-- Select --</option>${bomList.map(b => `<option value="${esc(b.id)}">${esc(b.id)} — ${esc(b.productName)}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Machine</label><input id="poMachine"></div>
-      <div class="field"><label>Planned Qty</label><input id="poQty" type="number" min="1"></div>
-    </div>
-    <button class="btn" id="createPoBtn">Create Order & Generate Pick List</button>
-    <div id="poMsg"></div>
-  </div>
-  <div class="card"><h2>Production Orders</h2><div id="poList">Loading…</div></div>`;
-
-  loadProductionOrders();
-
-  document.getElementById('createPoBtn').addEventListener('click', async () => {
-    const productCode = document.getElementById('poProduct').value;
-    const plannedQty = Number(document.getElementById('poQty').value);
-    const machine = document.getElementById('poMachine').value.trim();
-    const msg = document.getElementById('poMsg');
-    if (!productCode || !plannedQty) { alert('Select a product and enter planned qty.'); return; }
-
-    const bomDoc = bomList.find(b => b.id === productCode);
-    if (!bomDoc || !bomDoc.components || bomDoc.components.length === 0) {
-      msg.innerHTML = `<div class="msg err">No BOM components found for ${esc(productCode)}. Define the BOM first.</div>`;
-      return;
+      if(!parsed.length){
+        toast('No valid rows found in that sheet', 'red');
+        document.getElementById('excelFileName').textContent = '';
+        return;
+      }
+      persistBulk({ pickList: parsed, binLog: {} });
+      document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
+      toast(parsed.length + ' items imported', 'green');
+      renderPickList();
+    }catch(err){
+      toast('Could not read that file', 'red');
+      document.getElementById('excelFileName').textContent = '';
     }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
 
-    const orderNo = document.getElementById('poNo').value.trim() || ('PO-' + Date.now());
-    await setDoc(doc(db, "productionOrders", orderNo), {
-      productCode, machine, plannedQty, status: 'PICKING', orderDate: new Date().toISOString().slice(0,10),
-      createdBy: currentUser.email, createdAt: serverTimestamp()
-    });
+document.getElementById('btnClearList').addEventListener('click', ()=>{
+  if(!confirm('Clear the entire pick list and bin log?')) return;
+  persistBulk({ pickList: [], binLog: {} });
+  renderPickList(); refreshStats();
+  toast('Pick list cleared');
+});
 
-    const stockMap = await computeStockByItemLocation();
-    const pickListNo = 'PL-' + orderNo;
-    const lines = bomDoc.components.map(c => ({
-      itemCode: c.itemCode, itemName: c.itemName,
-      requiredQty: Math.ceil(c.qtyPerUnit * plannedQty * 1000) / 1000,
-      suggestedLocation: bestLocationFor(stockMap, c.itemCode),
-      pickedQty: 0, status: 'PENDING'
-    }));
+document.getElementById('btnSaveBins').addEventListener('click', ()=>{
+  const raw = document.getElementById('binListInput').value.trim();
+  const newBins = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  persistBulk({ bins: newBins });
+  toast(newBins.length + ' bins saved', 'green');
+});
 
-    await setDoc(doc(db, "pickLists", pickListNo), {
-      productionOrderNo: orderNo, status: 'GENERATED', generatedDate: serverTimestamp(), lines
-    });
-
-    msg.innerHTML = `<div class="msg ok">Order ${esc(orderNo)} created. Pick List ${esc(pickListNo)} generated with ${lines.length} item(s) — check the "Pick Lists" tab.</div>`;
-    document.getElementById('poNo').value = '';
-    document.getElementById('poQty').value = '';
-    loadProductionOrders();
+document.getElementById('btnExportCsv').addEventListener('click', ()=>{
+  if(!pickList.length){ toast('Nothing to export', 'red'); return; }
+  let csv = 'Item Code,Item Name,Qty Required,Qty Picked,Status\n';
+  pickList.forEach(i=>{
+    csv += `${i.code},"${(i.name||'').replace(/"/g,'""')}",${i.qtyReq},${i.qtyPicked},${i.qtyPicked>=i.qtyReq?'Done':'Pending'}\n`;
   });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pick_list_export.csv';
+  a.click();
+});
+
+document.getElementById('btnResetAll').addEventListener('click', ()=>{
+  if(!confirm('This wipes pick list, bin log and bin master. Continue?')) return;
+  activeBin = null;
+  LS.set('wms_active_bin', null);
+  persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
+  renderPickList(); renderSetup(); refreshStats();
+  document.getElementById('activeBinLabel').textContent = 'Not set';
+  toast('All data reset');
+});
+
+/* ---------------- Active bin ---------------- */
+function setActiveBin(bin){
+  activeBin = bin;
+  LS.set('wms_active_bin', activeBin);
+  document.getElementById('activeBinLabel').textContent = bin || 'Not set';
+}
+setActiveBin(activeBin);
+
+document.getElementById('btnChangeBin').addEventListener('click', ()=>{
+  const list = bins.length ? bins : [];
+  const promptMsg = 'Enter Bin ID' + (list.length ? ('\n\nKnown: ' + list.slice(0,8).join(', ') + (list.length>8?'…':'')) : '');
+  const val = prompt(promptMsg, activeBin || '');
+  if(val && val.trim()){ setActiveBin(val.trim()); toast('Active bin: ' + val.trim(), 'green'); }
+});
+
+/* ---------------- Scanning (html5-qrcode) ---------------- */
+let scannerItem = null, scannerBin = null;
+
+function stopAllScanners(){
+  if(scannerItem){ scannerItem.stop().catch(()=>{}); scannerItem = null; document.getElementById('reader').style.display='none'; document.getElementById('btnStartItemScan').style.display=''; document.getElementById('btnStopScan').style.display='none'; }
+  if(scannerBin){ scannerBin.stop().catch(()=>{}); scannerBin = null; document.getElementById('readerBin').style.display='none'; }
 }
 
-async function loadProductionOrders() {
-  const snap = await getDocs(query(collection(db, "productionOrders"), orderBy("createdAt", "desc"), limit(20)));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('poList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No production orders yet.</p>'
-    : `<table><thead><tr><th>Order No</th><th>Product</th><th>Machine</th><th>Qty</th><th>Status</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="name">${esc(r.productCode)}</td><td>${esc(r.machine)}</td><td>${r.plannedQty}</td><td><span class="chip ${r.status==='COMPLETED'?'ok':'warn'}">${esc(r.status)}</span></td></tr>`).join('')}
-      </tbody></table>`;
-}
+document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
+  const readerEl = document.getElementById('reader');
+  readerEl.style.display = 'block';
+  document.getElementById('btnStartItemScan').style.display = 'none';
+  document.getElementById('btnStopScan').style.display = '';
+  scannerItem = new Html5Qrcode('reader');
+  scannerItem.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 240 } },
+    (decodedText)=>{ handleItemScan(decodedText.trim()); },
+    ()=>{}
+  ).catch(err=>{
+    toast('Camera error — check permission', 'red');
+    document.getElementById('btnStartItemScan').style.display='';
+    document.getElementById('btnStopScan').style.display='none';
+    readerEl.style.display='none';
+  });
+});
 
-// ---------------- Pick Lists ----------------
-async function renderPickLists(main) {
-  main.innerHTML = `<div class="card"><h2>Pick Lists</h2><div id="pickListArea">Loading…</div></div>`;
-  const snap = await getDocs(query(collection(db, "pickLists"), orderBy("generatedDate", "desc"), limit(20)));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+document.getElementById('btnStopScan').addEventListener('click', stopAllScanners);
 
-  if (rows.length === 0) {
-    document.getElementById('pickListArea').innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">No pick lists yet — create a Production Order to generate one.</p>';
+document.getElementById('manualItemInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    const v = e.target.value.trim();
+    if(v){ handleItemScan(v); e.target.value=''; }
+  }
+});
+
+document.getElementById('btnScanBinView').addEventListener('click', ()=>{
+  const readerEl = document.getElementById('readerBin');
+  readerEl.style.display = 'block';
+  scannerBin = new Html5Qrcode('readerBin');
+  scannerBin.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText)=>{
+      scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display='none';
+      selectBinForView(decodedText.trim());
+    },
+    ()=>{}
+  ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
+});
+
+/* ---------------- Item scan → match logic ---------------- */
+let pendingScanCode = null;
+
+function handleItemScan(code){
+  if(!activeBin){
+    toast('Set an active bin first', 'red');
     return;
   }
-
-  let html = '';
-  rows.forEach(pl => {
-    const done = (pl.lines||[]).every(l => l.status === 'PICKED');
-    html += `<div class="card" style="margin-top:10px;">
-      <b>${esc(pl.id)}</b> · Order: ${esc(pl.productionOrderNo)} · <span class="chip ${done?'ok':'warn'}">${done?'READY FOR TRANSFER':pl.status}</span>
-      <table class="lines-table" style="margin-top:8px;"><thead><tr><th>Item</th><th>Required</th><th>From Location</th><th>Status</th><th></th></tr></thead>
-      <tbody>${(pl.lines||[]).map((l, i) => `
-        <tr>
-          <td class="name">${esc(l.itemCode)} — ${esc(l.itemName)}</td>
-          <td>${l.requiredQty}</td>
-          <td>${esc(l.suggestedLocation) || '<span style="color:var(--danger);">no stock found</span>'}</td>
-          <td><span class="chip ${l.status==='PICKED'?'ok':'warn'}">${esc(l.status)}</span></td>
-          <td>${l.status !== 'PICKED' ? `<button class="btn secondary" style="padding:5px 10px;margin:0;font-size:11px;" data-pl="${esc(pl.id)}" data-idx="${i}">Mark Picked</button>` : ''}</td>
-        </tr>`).join('')}</tbody></table>
-    </div>`;
-  });
-  document.getElementById('pickListArea').innerHTML = html;
-
-  document.querySelectorAll('[data-pl]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const plId = btn.dataset.pl, idx = Number(btn.dataset.idx);
-      const plRef = doc(db, "pickLists", plId);
-      const plSnap = await getDoc(plRef);
-      const pl = plSnap.data();
-      const line = pl.lines[idx];
-
-      await addDoc(collection(db, "stockLedger"), {
-        dateTime: serverTimestamp(), txnType: 'PICK', itemCode: line.itemCode, batchNo: '',
-        qty: line.requiredQty, fromLocation: line.suggestedLocation, toLocation: 'PICKING-TRANSIT',
-        refNo: plId, user: currentUser.email, remarks: `For ${pl.productionOrderNo}`
-      });
-
-      pl.lines[idx].pickedQty = line.requiredQty;
-      pl.lines[idx].status = 'PICKED';
-      const allDone = pl.lines.every(l => l.status === 'PICKED');
-      await updateDoc(plRef, { lines: pl.lines, status: allDone ? 'COMPLETED' : 'IN PROGRESS' });
-      renderPickLists(main);
-    });
-  });
-}
-
-// ---------------- Stock Ledger ----------------
-async function renderStock(main) {
-  main.innerHTML = `<div class="card"><h2>Stock Ledger</h2><div id="stockList">Loading…</div></div>`;
-  const snap = await getDocs(query(collection(db, "stockLedger"), orderBy("dateTime", "desc"), limit(100)));
-  const rows = snap.docs.map(d => d.data());
-  document.getElementById('stockList').innerHTML = rows.length === 0
-    ? '<p style="font-size:13px;color:var(--ink-soft);">No transactions yet.</p>'
-    : `<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>From</th><th>To</th><th>Ref</th><th>User</th></tr></thead><tbody>
-        ${rows.map(r => `<tr><td>${fmtDate(r.dateTime)}</td><td><span class="chip neutral">${esc(r.txnType)}</span></td><td>${esc(r.itemCode)}</td><td>${r.qty}</td><td>${esc(r.fromLocation)}</td><td>${esc(r.toLocation)}</td><td>${esc(r.refNo)}</td><td class="name">${esc(r.user)}</td></tr>`).join('')}
-      </tbody></table>`;
-}
-
-// ---------------- Users (role admin) ----------------
-async function renderUsers(main) {
-  main.innerHTML = `<div class="card"><h2>Users</h2><div id="usersList">Loading…</div></div>`;
-  if (currentRole !== 'ADMIN') {
-    document.getElementById('usersList').innerHTML = '<p style="font-size:13px;color:var(--danger);">Only Admins can manage users.</p>';
+  const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+  if(!item){
+    pendingScanCode = code;
+    document.getElementById('notFoundCode').textContent = code;
+    document.getElementById('sheetNotFound').classList.add('open');
     return;
   }
-  const snap = await getDocs(collection(db, "users"));
-  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  document.getElementById('usersList').innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Change Role</th></tr></thead><tbody>
-    ${rows.map(u => `<tr><td class="name">${esc(u.email)}</td><td><span class="chip ${u.role==='PENDING'?'warn':'ok'}">${esc(u.role)}</span></td><td>${esc(u.status)}</td>
-    <td><select data-uid="${u.id}" class="roleSelect">
-      ${['PENDING','ADMIN','STORE','QC','PICKER','SUPERVISOR','LINE OPERATOR'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join('')}
-    </select></td></tr>`).join('')}
-  </tbody></table>`;
-
-  document.querySelectorAll('.roleSelect').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      await updateDoc(doc(db, "users", sel.dataset.uid), { role: sel.value });
-      alert('Role updated.');
-    });
-  });
+  if(item.qtyPicked >= item.qtyReq){
+    toast(item.code + ' already fully picked', 'red');
+    return;
+  }
+  openConfirmSheet(item);
 }
+
+let confirmItem = null;
+function openConfirmSheet(item){
+  confirmItem = item;
+  document.getElementById('sheetItemName').textContent = item.name || item.code;
+  document.getElementById('sheetItemMeta').textContent =
+    item.code + ' · Required ' + item.qtyReq + ' · Picked ' + item.qtyPicked;
+  const remaining = item.qtyReq - item.qtyPicked;
+  document.getElementById('qtyInput').value = remaining;
+  document.getElementById('qtyInput').max = remaining;
+  document.getElementById('sheetBackdrop').classList.add('open');
+}
+
+document.getElementById('qtyMinus').addEventListener('click', ()=>{
+  const inp = document.getElementById('qtyInput');
+  inp.value = Math.max(1, (parseInt(inp.value)||1) - 1);
+});
+document.getElementById('qtyPlus').addEventListener('click', ()=>{
+  const inp = document.getElementById('qtyInput');
+  const max = confirmItem ? (confirmItem.qtyReq - confirmItem.qtyPicked) : 999999;
+  inp.value = Math.min(max, (parseInt(inp.value)||1) + 1);
+});
+
+document.getElementById('btnCancelPick').addEventListener('click', ()=>{
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  confirmItem = null;
+});
+
+document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
+  if(!confirmItem) return;
+  let qty = parseInt(document.getElementById('qtyInput').value) || 0;
+  const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
+  qty = Math.max(1, Math.min(qty, remaining));
+  const codeSnapshot = confirmItem.code, nameSnapshot = confirmItem.name;
+  persistPick(codeSnapshot, qty, activeBin, nameSnapshot);
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  toast('Picked ' + qty + ' × ' + codeSnapshot, 'green');
+  confirmItem = null;
+});
+
+document.getElementById('btnIgnoreScan').addEventListener('click', ()=>{
+  document.getElementById('sheetNotFound').classList.remove('open');
+  pendingScanCode = null;
+});
+document.getElementById('btnLogAnyway').addEventListener('click', ()=>{
+  if(!pendingScanCode) return;
+  persistBinOnlyLog(activeBin, pendingScanCode, '(not on pick list)', 1);
+  toast('Logged ' + pendingScanCode + ' to ' + activeBin, 'green');
+  document.getElementById('sheetNotFound').classList.remove('open');
+  pendingScanCode = null;
+});
+
+/* ---------------- Bin view ---------------- */
+function renderBinSelect(){
+  const sel = document.getElementById('binSelectView');
+  const allBins = Array.from(new Set([...bins, ...Object.keys(binLog)]));
+  sel.innerHTML = '<option value="">— choose a bin —</option>' + allBins.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  sel.value = activeBin && allBins.includes(activeBin) ? activeBin : '';
+  renderBinContents(sel.value);
+}
+document.getElementById('binSelectView').addEventListener('change', (e)=> renderBinContents(e.target.value));
+
+function selectBinForView(bin){
+  renderBinSelect();
+  const sel = document.getElementById('binSelectView');
+  if(![...sel.options].some(o=>o.value===bin)){
+    const opt = document.createElement('option'); opt.value = bin; opt.textContent = bin;
+    sel.appendChild(opt);
+  }
+  sel.value = bin;
+  renderBinContents(bin);
+}
+
+function renderBinContents(bin){
+  const card = document.getElementById('binContentsCard');
+  if(!bin){
+    card.innerHTML = '<p class="hint">Select a bin above to view everything logged inside it.</p>';
+    return;
+  }
+  const entries = binLog[bin] || [];
+  if(!entries.length){
+    card.innerHTML = emptyHtml('📦','Bin is empty', 'No items logged into ' + escapeHtml(bin) + ' yet.');
+    return;
+  }
+  const totals = {};
+  entries.forEach(e=>{ totals[e.code] = (totals[e.code]||0) + e.qty; });
+  const totalsHtml = Object.entries(totals).map(([code, qty])=>
+    `<div class="bin-entry"><span class="code">${escapeHtml(code)}</span><span>${qty} pcs</span></div>`
+  ).join('');
+  const logHtml = entries.slice().reverse().map(e=>
+    `<div class="bin-entry"><span>${escapeHtml(e.code)} <span style="color:var(--ink-dim)">×${e.qty}</span></span><span class="t">${new Date(e.ts).toLocaleString()}</span></div>`
+  ).join('');
+  card.innerHTML =
+    `<label>Totals in this bin</label>${totalsHtml}` +
+    `<label style="margin-top:14px;">Activity log</label>${logHtml}`;
+}
+
+/* ---------------- Init ---------------- */
+renderPickList();
+renderPending();
+refreshStats();
+initFirebase();
 </script>
 </body>
 </html>
