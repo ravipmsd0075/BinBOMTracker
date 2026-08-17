@@ -67,20 +67,8 @@
     font-size:11px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace;
     margin-top:1px;
   }
-  .stat-strip{
-    display:flex; gap:8px; margin-top:14px; overflow-x:auto; padding-bottom:2px;
-  }
-  .stat{
-    flex: 1 1 0; min-width:84px;
-    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
-    padding: 8px 10px;
-  }
-  .stat .n{ font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600; line-height:1; }
-  .stat .l{ font-size: 10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.06em; margin-top:4px; }
-  .stat.green .n{ color: var(--green); }
-  .stat.amber .n{ color: var(--amber); }
 
-  /* ---- Tabs ---- */
+  /* ---- Tabs (also carry live stat counts — one unified, clickable bar) ---- */
   nav.tabs{
     position: sticky; top: 0; z-index: 19;
     display:flex; gap:6px; padding: 10px 16px; background:var(--bg);
@@ -96,6 +84,18 @@
   nav.tabs button.active{
     background: var(--amber); color:#1a1300; border-color:var(--amber);
   }
+  nav.tabs button.tabstat{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2px; padding:7px 14px; border-radius:12px; min-width:64px; flex-shrink:0;
+  }
+  nav.tabs button.tabstat .tn{
+    font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:15px; line-height:1;
+  }
+  nav.tabs button.tabstat .tl{
+    font-family:'Space Grotesk', sans-serif; font-size:10px; font-weight:600; line-height:1;
+  }
+  nav.tabs button.tabstat .tn.amber-n{ color: var(--amber); }
+  nav.tabs button.tabstat.active .tn.amber-n{ color:#1a1300; }
 
   main{ padding: 16px; max-width: 640px; margin: 0 auto; }
   section.view{ display:none; animation: fade .18s ease; }
@@ -161,19 +161,26 @@
     font-family:'IBM Plex Mono', monospace; flex-shrink:0;
   }
 
-  /* ---- Scan screen: name+qty preview list ---- */
+  /* ---- Scan screen: name+qty preview carousel (swipe, stays compact) ---- */
+  .spick-carousel{
+    display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory;
+    padding-bottom:4px; -webkit-overflow-scrolling:touch;
+  }
+  .spick-carousel::-webkit-scrollbar{ height:4px; }
+  .spick-carousel::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
   .spick-row{
-    display:flex; align-items:center; gap:10px;
+    flex:0 0 auto; width: 72%; max-width:300px; scroll-snap-align:start;
     background: var(--panel-2); border:1px solid var(--line); border-left:4px solid var(--line);
-    border-radius: var(--radius); padding:10px 12px;
+    border-radius: var(--radius); padding:11px 12px;
+    display:flex; align-items:center; gap:10px;
   }
   .spick-row.next-target{
     border-left-color: var(--amber);
-    background: linear-gradient(90deg, var(--amber-dim), var(--panel-2) 45%);
+    background: linear-gradient(90deg, var(--amber-dim), var(--panel-2) 55%);
   }
   .spick-row .info{ flex:1; min-width:0; }
-  .spick-row .sname{ font-size:14px; font-weight:600; line-height:1.3; }
-  .spick-row .scode{ font-size:11px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace; margin-top:2px; }
+  .spick-row .sname{ font-size:13.5px; font-weight:600; line-height:1.3; }
+  .spick-row .scode{ font-size:10.5px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .spick-row .sqty{ font-family:'IBM Plex Mono', monospace; text-align:right; flex-shrink:0; }
   .spick-row .sqty .n{ font-size:16px; font-weight:600; }
   .spick-row.next-target .sqty .n{ color: var(--amber); }
@@ -182,6 +189,18 @@
     display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em;
     background: var(--amber); color:#1a1300; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px;
   }
+  .swipe-hint{ font-size:10px; color:var(--ink-dim); text-align:right; margin-top:4px; }
+
+  /* ---- Last pick / undo bar ---- */
+  .last-pick-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
+    padding: 9px 10px 9px 12px; margin-bottom:12px;
+  }
+  .last-pick-bar .info{ min-width:0; }
+  .last-pick-bar .l{ font-size:9.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+  .last-pick-bar .v{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:13px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .last-pick-bar button{ flex-shrink:0; }
 
   .empty{
     text-align:center; padding: 40px 20px; color: var(--ink-dim);
@@ -273,20 +292,24 @@
     </div>
     <div id="syncBadge" class="sync-badge offline">● Local only</div>
   </div>
-  <div class="stat-strip">
-    <div class="stat"><div class="n" id="statTotal">0</div><div class="l">Total SKU</div></div>
-    <div class="stat green"><div class="n" id="statDone">0</div><div class="l">Picked</div></div>
-    <div class="stat amber"><div class="n" id="statPending">0</div><div class="l">Pending</div></div>
-    <div class="stat"><div class="n" id="statBins">0</div><div class="l">Bins Used</div></div>
-  </div>
 </header>
 
 <nav class="tabs">
-  <button class="active" data-tab="scan">Scan &amp; Pick</button>
-  <button data-tab="list">Pick List</button>
-  <button data-tab="pending">Pending</button>
-  <button data-tab="bin">Bin View</button>
-  <button data-tab="setup">Setup</button>
+  <button class="tabstat active" data-tab="scan">
+    <span class="tn">📷</span><span class="tl">Scan &amp; Pick</span>
+  </button>
+  <button class="tabstat" data-tab="list">
+    <span class="tn" id="tabCountList">0/0</span><span class="tl">Pick List</span>
+  </button>
+  <button class="tabstat" data-tab="pending">
+    <span class="tn amber-n" id="tabCountPending">0</span><span class="tl">Pending</span>
+  </button>
+  <button class="tabstat" data-tab="bin">
+    <span class="tn" id="tabCountBin">0</span><span class="tl">Bin View</span>
+  </button>
+  <button class="tabstat" data-tab="setup">
+    <span class="tn">⚙</span><span class="tl">Setup</span>
+  </button>
 </nav>
 
 <main>
@@ -301,9 +324,18 @@
       <button class="btn sm ghost" id="btnChangeBin" style="width:auto;">Set Bin</button>
     </div>
 
+    <div class="last-pick-bar" id="lastPickBar" style="display:none;">
+      <div class="info">
+        <div class="l">Last picked</div>
+        <div class="v" id="lastPickText"></div>
+      </div>
+      <button class="btn sm ghost" id="btnUndoLastPick">↩ Undo</button>
+    </div>
+
     <div class="card" id="scanPendingCard">
       <label>Pick this <span class="next-pill">next</span> — match by name, then scan to confirm</label>
-      <div class="plist" id="scanPendingList" style="max-height:260px; overflow-y:auto;"></div>
+      <div class="spick-carousel" id="scanPendingList"></div>
+      <div class="swipe-hint">swipe ⟵⟶ for more items</div>
     </div>
 
     <div class="card scan-frame">
@@ -578,8 +610,8 @@ function persistBulk(patch){
 }
 
 // Atomic pick confirmation (transaction when online, direct mutation when local)
-function persistPick(code, qty, bin, itemNameForLog){
-  const logEntry = { code, name: itemNameForLog || '', qty, ts: new Date().toISOString() };
+function persistPick(code, qty, bin, itemNameForLog, ts){
+  const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString() };
   if(FIREBASE_ENABLED && fbReady){
     const ref = sessionDocRef();
     db.runTransaction(tx => tx.get(ref).then(doc=>{
@@ -609,6 +641,36 @@ function persistPick(code, qty, bin, itemNameForLog){
     refreshStats();
   }
 }
+
+// Reverse a previously confirmed pick (rollback wrong qty / wrong item)
+function persistUndo(pick){
+  if(!pick) return;
+  if(FIREBASE_ENABLED && fbReady){
+    const ref = sessionDocRef();
+    db.runTransaction(tx => tx.get(ref).then(doc=>{
+      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+      const list = data.pickList || [];
+      const idx = list.findIndex(i => i.code.toLowerCase() === pick.code.toLowerCase());
+      if(idx !== -1){
+        list[idx] = { ...list[idx], qtyPicked: Math.max(0, list[idx].qtyPicked - pick.qty) };
+      }
+      const log = data.binLog || {};
+      if(log[pick.bin]) log[pick.bin] = log[pick.bin].filter(e => e.ts !== pick.ts);
+      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+    })).then(()=>{
+      toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+    }).catch(err=>{ toast('Undo failed', 'red'); console.error(err); });
+  } else {
+    const item = pickList.find(i => i.code.toLowerCase() === pick.code.toLowerCase());
+    if(item){ item.qtyPicked = Math.max(0, item.qtyPicked - pick.qty); }
+    if(binLog[pick.bin]) binLog[pick.bin] = binLog[pick.bin].filter(e => e.ts !== pick.ts);
+    saveAllLocal();
+    renderCurrentView();
+    refreshStats();
+    toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+  }
+}
+
 
 // Log an unmatched scan straight to a bin (no pick-list item to update)
 function persistBinOnlyLog(bin, code, name, qty){
@@ -656,10 +718,14 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
 function refreshStats(){
   const total = pickList.length;
   const done = pickList.filter(i=>i.qtyPicked >= i.qtyReq).length;
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statDone').textContent = done;
-  document.getElementById('statPending').textContent = total - done;
-  document.getElementById('statBins').textContent = Object.keys(binLog).filter(b => binLog[b] && binLog[b].length).length;
+  const pending = total - done;
+  const binsUsed = Object.keys(binLog).filter(b => binLog[b] && binLog[b].length).length;
+  const elList = document.getElementById('tabCountList');
+  const elPending = document.getElementById('tabCountPending');
+  const elBin = document.getElementById('tabCountBin');
+  if(elList) elList.textContent = done + '/' + total;
+  if(elPending) elPending.textContent = pending;
+  if(elBin) elBin.textContent = binsUsed;
 }
 
 /* ---------------- Pick list rendering ---------------- */
@@ -754,6 +820,7 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
   }).filter(i=>i.code);
   if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
   persistBulk({ pickList: parsed, binLog: {} });
+  hideLastPickBar();
   document.getElementById('pickListInput').value = '';
   toast(parsed.length + ' items loaded', 'green');
   renderPickList(); renderScanPending();
@@ -793,6 +860,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
         return;
       }
       persistBulk({ pickList: parsed, binLog: {} });
+      hideLastPickBar();
       document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
       toast(parsed.length + ' items imported', 'green');
       renderPickList(); renderScanPending();
@@ -808,6 +876,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
 document.getElementById('btnClearList').addEventListener('click', ()=>{
   if(!confirm('Clear the entire pick list and bin log?')) return;
   persistBulk({ pickList: [], binLog: {} });
+  hideLastPickBar();
   renderPickList(); renderScanPending(); refreshStats();
   toast('Pick list cleared');
 });
@@ -837,6 +906,7 @@ document.getElementById('btnResetAll').addEventListener('click', ()=>{
   activeBin = null;
   LS.set('wms_active_bin', null);
   persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
+  hideLastPickBar();
   renderPickList(); renderScanPending(); renderSetup(); refreshStats();
   document.getElementById('activeBinLabel').textContent = 'Not set';
   toast('All data reset');
@@ -957,13 +1027,33 @@ document.getElementById('btnCancelPick').addEventListener('click', ()=>{
   confirmItem = null;
 });
 
+/* ---------------- Undo last pick ---------------- */
+let lastPick = null;
+function showLastPickBar(pick){
+  lastPick = pick;
+  document.getElementById('lastPickText').textContent = pick.qty + ' × ' + (pick.name || pick.code) + '  (' + pick.code + ')';
+  document.getElementById('lastPickBar').style.display = 'flex';
+}
+function hideLastPickBar(){
+  document.getElementById('lastPickBar').style.display = 'none';
+  lastPick = null;
+}
+document.getElementById('btnUndoLastPick').addEventListener('click', ()=>{
+  if(!lastPick) return;
+  persistUndo(lastPick);
+  hideLastPickBar();
+});
+
 document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   if(!confirmItem) return;
   let qty = parseInt(document.getElementById('qtyInput').value) || 0;
   const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
   qty = Math.max(1, Math.min(qty, remaining));
   const codeSnapshot = confirmItem.code, nameSnapshot = confirmItem.name;
-  persistPick(codeSnapshot, qty, activeBin, nameSnapshot);
+  const binSnapshot = activeBin;
+  const tsSnapshot = new Date().toISOString();
+  persistPick(codeSnapshot, qty, binSnapshot, nameSnapshot, tsSnapshot);
+  showLastPickBar({ code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
   document.getElementById('sheetBackdrop').classList.remove('open');
   toast('Picked ' + qty + ' × ' + codeSnapshot, 'green');
   confirmItem = null;
