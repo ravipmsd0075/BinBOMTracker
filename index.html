@@ -161,6 +161,28 @@
     font-family:'IBM Plex Mono', monospace; flex-shrink:0;
   }
 
+  /* ---- Scan screen: name+qty preview list ---- */
+  .spick-row{
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel-2); border:1px solid var(--line); border-left:4px solid var(--line);
+    border-radius: var(--radius); padding:10px 12px;
+  }
+  .spick-row.next-target{
+    border-left-color: var(--amber);
+    background: linear-gradient(90deg, var(--amber-dim), var(--panel-2) 45%);
+  }
+  .spick-row .info{ flex:1; min-width:0; }
+  .spick-row .sname{ font-size:14px; font-weight:600; line-height:1.3; }
+  .spick-row .scode{ font-size:11px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace; margin-top:2px; }
+  .spick-row .sqty{ font-family:'IBM Plex Mono', monospace; text-align:right; flex-shrink:0; }
+  .spick-row .sqty .n{ font-size:16px; font-weight:600; }
+  .spick-row.next-target .sqty .n{ color: var(--amber); }
+  .spick-row .sqty .l{ font-size:9.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; }
+  .next-pill{
+    display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em;
+    background: var(--amber); color:#1a1300; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px;
+  }
+
   .empty{
     text-align:center; padding: 40px 20px; color: var(--ink-dim);
   }
@@ -277,6 +299,11 @@
         <div class="v" id="activeBinLabel">Not set</div>
       </div>
       <button class="btn sm ghost" id="btnChangeBin" style="width:auto;">Set Bin</button>
+    </div>
+
+    <div class="card" id="scanPendingCard">
+      <label>Pick this <span class="next-pill">next</span> — match by name, then scan to confirm</label>
+      <div class="plist" id="scanPendingList" style="max-height:260px; overflow-y:auto;"></div>
     </div>
 
     <div class="card scan-frame">
@@ -525,6 +552,7 @@ function renderCurrentView(){
   if(activeTab === 'pending') renderPending();
   if(activeTab === 'bin') renderBinSelect();
   renderPickList(); // keep stats/list fresh even off-tab
+  renderScanPending(); // keep scan-screen name/qty preview fresh even off-tab
 }
 
 /* ---------------- Unified write operations ---------------- */
@@ -615,6 +643,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'scan') renderScanPending();
     if(btn.dataset.tab === 'list') renderPickList();
     if(btn.dataset.tab === 'pending') renderPending();
     if(btn.dataset.tab === 'bin') renderBinSelect();
@@ -673,6 +702,32 @@ function renderPending(){
   c.innerHTML = pending.map(pickRowHtml).join('');
 }
 
+/* ---------------- Scan screen: name + qty preview ---------------- */
+function scanPendingRowHtml(item, isNext){
+  const remaining = item.qtyReq - item.qtyPicked;
+  return `<div class="spick-row${isNext ? ' next-target' : ''}">
+    <div class="info">
+      <div class="sname">${escapeHtml(item.name || item.code)}</div>
+      <div class="scode">${escapeHtml(item.code)}</div>
+    </div>
+    <div class="sqty">
+      <div class="n">${remaining}</div>
+      <div class="l">of ${item.qtyReq}</div>
+    </div>
+  </div>`;
+}
+
+function renderScanPending(){
+  const c = document.getElementById('scanPendingList');
+  if(!c) return;
+  const pending = pickList.filter(i => i.qtyPicked < i.qtyReq);
+  if(!pending.length){
+    c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item has been fully picked.' : 'Load a pick list first.');
+    return;
+  }
+  c.innerHTML = pending.map((item, idx) => scanPendingRowHtml(item, idx === 0)).join('');
+}
+
 function emptyHtml(glyph, title, sub){
   return `<div class="empty"><div class="glyph">${glyph}</div><p style="font-weight:600;color:var(--ink)">${title}</p><p>${sub}</p></div>`;
 }
@@ -701,7 +756,7 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
   persistBulk({ pickList: parsed, binLog: {} });
   document.getElementById('pickListInput').value = '';
   toast(parsed.length + ' items loaded', 'green');
-  renderPickList();
+  renderPickList(); renderScanPending();
 });
 
 document.getElementById('btnPickExcel').addEventListener('click', ()=>{
@@ -740,7 +795,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
       persistBulk({ pickList: parsed, binLog: {} });
       document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
       toast(parsed.length + ' items imported', 'green');
-      renderPickList();
+      renderPickList(); renderScanPending();
     }catch(err){
       toast('Could not read that file', 'red');
       document.getElementById('excelFileName').textContent = '';
@@ -753,7 +808,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
 document.getElementById('btnClearList').addEventListener('click', ()=>{
   if(!confirm('Clear the entire pick list and bin log?')) return;
   persistBulk({ pickList: [], binLog: {} });
-  renderPickList(); refreshStats();
+  renderPickList(); renderScanPending(); refreshStats();
   toast('Pick list cleared');
 });
 
@@ -782,7 +837,7 @@ document.getElementById('btnResetAll').addEventListener('click', ()=>{
   activeBin = null;
   LS.set('wms_active_bin', null);
   persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
-  renderPickList(); renderSetup(); refreshStats();
+  renderPickList(); renderScanPending(); renderSetup(); refreshStats();
   document.getElementById('activeBinLabel').textContent = 'Not set';
   toast('All data reset');
 });
@@ -974,6 +1029,7 @@ function renderBinContents(bin){
 /* ---------------- Init ---------------- */
 renderPickList();
 renderPending();
+renderScanPending();
 refreshStats();
 initFirebase();
 </script>
