@@ -1,108 +1,3 @@
-Skip to content
-ravipmsd0075
-BinBOMTracker
-Repository navigation
-Code
-Issues
-Pull requests
-Actions
-Projects
-Wiki
-Security and quality
-2
- (2)
-Insights
-Settings
-Files
-Go to file
-t
-T
-.github
-index.html
-BinBOMTracker
-/
-index.html
-in
-main
-
-Edit
-
-Preview
-Indent mode
-
-Spaces
-Indent size
-
-2
-Line wrap mode
-
-No wrap
-Editing index.html file contents
-  1
-  2
-  3
-  4
-  5
-  6
-  7
-  8
-  9
- 10
- 11
- 12
- 13
- 14
- 15
- 16
- 17
- 18
- 19
- 20
- 21
- 22
- 23
- 24
- 25
- 26
- 27
- 28
- 29
- 30
- 31
- 32
- 33
- 34
- 35
- 36
- 37
- 38
- 39
- 40
- 41
- 42
- 43
- 44
- 45
- 46
- 47
- 48
- 49
- 50
- 51
- 52
- 53
- 54
- 55
- 56
- 57
- 58
- 59
- 60
- 61
- 62
- 63
- 64
- 65
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -168,5 +63,1065 @@ Editing index.html file contents
     font-family:'Space Grotesk', sans-serif;
     font-size: 17px; margin:0; letter-spacing: 0.2px;
   }
-Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
- 
+  .brand .sub{
+    font-size:11px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace;
+    margin-top:1px;
+  }
+
+  /* ---- Tabs (also carry live stat counts — one unified, clickable bar) ---- */
+  nav.tabs{
+    position: sticky; top: 0; z-index: 19;
+    display:flex; gap:6px; padding: 10px 16px; background:var(--bg);
+    border-bottom: 1px solid var(--line);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    font-family:'Space Grotesk', sans-serif; font-size:13px; font-weight:600;
+    background:transparent; color:var(--ink-dim); border:1px solid var(--line);
+    padding:8px 13px; border-radius: 999px; cursor:pointer; white-space:nowrap;
+    transition: all .15s ease;
+  }
+  nav.tabs button.active{
+    background: var(--amber); color:#1a1300; border-color:var(--amber);
+  }
+  nav.tabs button.tabstat{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2px; padding:7px 14px; border-radius:12px; min-width:64px; flex-shrink:0;
+  }
+  nav.tabs button.tabstat .tn{
+    font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:15px; line-height:1;
+  }
+  nav.tabs button.tabstat .tl{
+    font-family:'Space Grotesk', sans-serif; font-size:10px; font-weight:600; line-height:1;
+  }
+  nav.tabs button.tabstat .tn.amber-n{ color: var(--amber); }
+  nav.tabs button.tabstat.active .tn.amber-n{ color:#1a1300; }
+
+  main{ padding: 16px; max-width: 640px; margin: 0 auto; }
+  section.view{ display:none; animation: fade .18s ease; }
+  section.view.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  h2.section-title{
+    font-family:'Space Grotesk', sans-serif; font-size:15px; margin: 4px 0 12px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  h2.section-title .count{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim); font-weight:400;
+  }
+
+  .card{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 12px;
+  }
+  label{ font-size:11px; color: var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:5px; }
+  textarea, input[type=text], input[type=number], select{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:10px 11px; font-size:14px; font-family:'IBM Plex Mono', monospace;
+    outline:none;
+  }
+  textarea:focus, input:focus, select:focus{ border-color: var(--amber); }
+  textarea{ min-height:120px; resize:vertical; }
+  select{ font-family:'Inter',sans-serif; }
+
+  .btn{
+    font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:13.5px;
+    border-radius:8px; border:1px solid var(--line); padding:11px 16px; cursor:pointer;
+    background: var(--panel-2); color: var(--ink); width:100%;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition: transform .08s ease;
+  }
+  .btn:active{ transform: scale(0.98); }
+  .btn.primary{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
+  .btn.ghost{ background:transparent; }
+  .btn.danger{ color: var(--red); border-color: var(--red-dim); }
+  .btn.sm{ padding:8px 12px; font-size:12.5px; width:auto; }
+  .row{ display:flex; gap:8px; }
+  .row > *{ flex:1; }
+
+  /* ---- Pick list table -> card rows ---- */
+  .plist{ display:flex; flex-direction:column; gap:8px; }
+  .prow{
+    background: var(--panel); border:1px solid var(--line); border-left: 4px solid var(--line);
+    border-radius: var(--radius); padding:11px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .prow.done{ border-left-color: var(--green); background: linear-gradient(90deg, var(--green-dim), var(--panel) 30%); }
+  .prow.partial{ border-left-color: var(--amber); }
+  .prow .info{ flex:1; min-width:0; }
+  .prow .code{ font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; }
+  .prow .name{ font-size:12px; color: var(--ink-dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prow .qty{ font-family:'IBM Plex Mono', monospace; text-align:right; flex-shrink:0; }
+  .prow .qty .frac{ font-size:15px; font-weight:600; }
+  .prow .qty .frac .done-n{ color: var(--green); }
+  .prow .qty .frac .partial-n{ color: var(--amber); }
+  .prow .tag{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); }
+  .badge-done{
+    font-size:10px; background: var(--green-dim); color: var(--green); padding:3px 7px; border-radius:5px;
+    font-family:'IBM Plex Mono', monospace; flex-shrink:0;
+  }
+
+  /* ---- Scan screen: name+qty preview carousel (swipe, stays compact) ---- */
+  .spick-carousel{
+    display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory;
+    padding-bottom:4px; -webkit-overflow-scrolling:touch;
+  }
+  .spick-carousel::-webkit-scrollbar{ height:4px; }
+  .spick-carousel::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
+  .spick-row{
+    flex:0 0 auto; width: 72%; max-width:300px; scroll-snap-align:start;
+    background: var(--panel-2); border:1px solid var(--line); border-left:4px solid var(--line);
+    border-radius: var(--radius); padding:11px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .spick-row.next-target{
+    border-left-color: var(--amber);
+    background: linear-gradient(90deg, var(--amber-dim), var(--panel-2) 55%);
+  }
+  .spick-row .info{ flex:1; min-width:0; }
+  .spick-row .sname{ font-size:13.5px; font-weight:600; line-height:1.3; }
+  .spick-row .scode{ font-size:10.5px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .spick-row .sqty{ font-family:'IBM Plex Mono', monospace; text-align:right; flex-shrink:0; }
+  .spick-row .sqty .n{ font-size:16px; font-weight:600; }
+  .spick-row.next-target .sqty .n{ color: var(--amber); }
+  .spick-row .sqty .l{ font-size:9.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; }
+  .next-pill{
+    display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em;
+    background: var(--amber); color:#1a1300; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px;
+  }
+  .swipe-hint{ font-size:10px; color:var(--ink-dim); text-align:right; margin-top:4px; }
+
+  /* ---- Last pick / undo bar ---- */
+  .last-pick-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
+    padding: 9px 10px 9px 12px; margin-bottom:12px;
+  }
+  .last-pick-bar .info{ min-width:0; }
+  .last-pick-bar .l{ font-size:9.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+  .last-pick-bar .v{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:13px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .last-pick-bar button{ flex-shrink:0; }
+
+  .empty{
+    text-align:center; padding: 40px 20px; color: var(--ink-dim);
+  }
+  .empty .glyph{ font-size:28px; margin-bottom:8px; opacity:.5; }
+  .empty p{ font-size:13px; margin: 4px 0; }
+
+  /* ---- Scanner ---- */
+  #reader{ width:100%; border-radius: var(--radius); overflow:hidden; border:1px solid var(--line); }
+  #reader video{ border-radius: var(--radius); }
+  .scan-frame{
+    position:relative;
+  }
+  .active-bin-chip{
+    display:flex; align-items:center; justify-content:space-between;
+    background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
+    padding: 9px 12px; margin-bottom:12px;
+  }
+  .active-bin-chip .l{ font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+  .active-bin-chip .v{ font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--amber); font-size:14px; }
+
+  /* ---- Confirm sheet ---- */
+  .sheet-backdrop{
+    position:fixed; inset:0; background: rgba(8,10,13,.72); z-index:50;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-backdrop.open{ display:flex; }
+  .sheet{
+    background: var(--panel); border-top:1px solid var(--line); border-radius: 16px 16px 0 0;
+    padding: 18px 16px 20px; width:100%; max-width:640px;
+    animation: up .18s ease;
+  }
+  @keyframes up{ from{ transform:translateY(30px); opacity:0 } to{ transform:none; opacity:1 } }
+  .sheet h3{ font-family:'Space Grotesk',sans-serif; margin:0 0 3px; font-size:16px; }
+  .sheet .meta{ font-size:12px; color:var(--ink-dim); margin-bottom:14px; font-family:'IBM Plex Mono', monospace; }
+  .qty-stepper{ display:flex; align-items:center; gap:10px; }
+  .qty-stepper button{
+    width:42px; height:42px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2);
+    color:var(--ink); font-size:19px; cursor:pointer;
+  }
+  .qty-stepper input{ text-align:center; font-size:18px; font-weight:600; }
+
+  /* ---- toast ---- */
+  #toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background: var(--ink); color:#12161c; padding:11px 18px; border-radius:999px;
+    font-size:13px; font-weight:600; font-family:'Space Grotesk',sans-serif;
+    opacity:0; transition: all .25s ease; z-index:60; pointer-events:none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.green{ background: var(--green); color:#06210f; }
+  #toast.red{ background: var(--red); color:#2a0808; }
+
+  /* ---- bin log ---- */
+  .bin-entry{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 9px 0; border-bottom: 1px solid var(--line); font-size:13px;
+  }
+  .bin-entry:last-child{ border-bottom:none; }
+  .bin-entry .code{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .bin-entry .t{ font-size:10.5px; color:var(--ink-dim); font-family:'IBM Plex Mono', monospace; }
+
+  .foot-actions{
+    display:flex; gap:8px; margin-top: 14px;
+  }
+  .hint{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin-top:8px; }
+  .divider-label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-dim); text-align:center; margin: 12px 0; position:relative; }
+  .divider-label::before, .divider-label::after{ content:""; position:absolute; top:50%; width:38%; height:1px; background:var(--line); }
+  .divider-label::before{ left:0; } .divider-label::after{ right:0; }
+
+  .sync-badge{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:5px 10px;
+    border-radius:999px; white-space:nowrap; flex-shrink:0; align-self:flex-start;
+  }
+  .sync-badge.live{ background: var(--green-dim); color: var(--green); }
+  .sync-badge.connecting{ background: var(--amber-dim); color: var(--amber); }
+  .sync-badge.offline{ background: var(--panel-2); color: var(--ink-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark"></div>
+    <div style="flex:1;">
+      <h1>Picking List</h1>
+      <div class="sub">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
+    </div>
+    <div id="syncBadge" class="sync-badge offline">● Local only</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tabstat active" data-tab="scan">
+    <span class="tn">📷</span><span class="tl">Scan &amp; Pick</span>
+  </button>
+  <button class="tabstat" data-tab="list">
+    <span class="tn" id="tabCountList">0/0</span><span class="tl">Pick List</span>
+  </button>
+  <button class="tabstat" data-tab="pending">
+    <span class="tn amber-n" id="tabCountPending">0</span><span class="tl">Pending</span>
+  </button>
+  <button class="tabstat" data-tab="bin">
+    <span class="tn" id="tabCountBin">0</span><span class="tl">Bin View</span>
+  </button>
+  <button class="tabstat" data-tab="setup">
+    <span class="tn">⚙</span><span class="tl">Setup</span>
+  </button>
+</nav>
+
+<main>
+
+  <!-- ===================== SCAN & PICK ===================== -->
+  <section class="view active" id="view-scan">
+    <div class="active-bin-chip">
+      <div>
+        <div class="l">Active Bin</div>
+        <div class="v" id="activeBinLabel">Not set</div>
+      </div>
+      <button class="btn sm ghost" id="btnChangeBin" style="width:auto;">Set Bin</button>
+    </div>
+
+    <div class="last-pick-bar" id="lastPickBar" style="display:none;">
+      <div class="info">
+        <div class="l">Last picked</div>
+        <div class="v" id="lastPickText"></div>
+      </div>
+      <button class="btn sm ghost" id="btnUndoLastPick">↩ Undo</button>
+    </div>
+
+    <div class="card" id="scanPendingCard">
+      <label>Pick this <span class="next-pill">next</span> — match by name, then scan to confirm</label>
+      <div class="spick-carousel" id="scanPendingList"></div>
+      <div class="swipe-hint">swipe ⟵⟶ for more items</div>
+    </div>
+
+    <div class="card scan-frame">
+      <label>Item scan</label>
+      <div id="reader" style="display:none;"></div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn primary" id="btnStartItemScan">📷 Scan Item</button>
+        <button class="btn ghost" id="btnStopScan" style="display:none;">Stop</button>
+      </div>
+      <div class="divider-label">or enter manually</div>
+      <input type="text" id="manualItemInput" placeholder="Type / scanner-gun input then Enter">
+      <p class="hint">Handheld barcode-gun input works here too — it types into this box and hits Enter automatically.</p>
+    </div>
+  </section>
+
+  <!-- ===================== PICK LIST ===================== -->
+  <section class="view" id="view-list">
+    <h2 class="section-title">Master Pick List <span class="count" id="listCount">0 items</span></h2>
+    <div class="plist" id="pickListContainer"></div>
+  </section>
+
+  <!-- ===================== PENDING ===================== -->
+  <section class="view" id="view-pending">
+    <h2 class="section-title">Pending Items <span class="count" id="pendingCount">0 remaining</span></h2>
+    <div class="plist" id="pendingContainer"></div>
+  </section>
+
+  <!-- ===================== BIN VIEW ===================== -->
+  <section class="view" id="view-bin">
+    <h2 class="section-title">Bin Contents</h2>
+    <div class="card">
+      <label>Select or scan a bin</label>
+      <div class="row">
+        <select id="binSelectView"></select>
+        <button class="btn sm" id="btnScanBinView" style="width:auto;">📷 Scan</button>
+      </div>
+      <div id="readerBin" style="display:none; margin-top:10px;" class="scan-frame"></div>
+    </div>
+    <div class="card" id="binContentsCard">
+      <p class="hint">Select a bin above to view everything logged inside it.</p>
+    </div>
+  </section>
+
+  <!-- ===================== SETUP ===================== -->
+  <section class="view" id="view-setup">
+    <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
+    <div class="card">
+      <label>Session ID (same on every device to share data)</label>
+      <div class="row">
+        <input type="text" id="sessionIdInput" placeholder="e.g. 2026-08-17-run1">
+        <button class="btn sm" id="btnSetSession" style="width:auto;">Join</button>
+      </div>
+      <p class="hint" id="syncHint">Firebase isn't configured in this file yet, so data is saved only on this device. Open the file (index.html) in a text editor, find <code>firebaseConfig</code> near the top of the script, and paste your pmsd-wms project's config there — every device using the same Session ID will then see the same pick list and bin log live.</p>
+    </div>
+
+    <h2 class="section-title">Import Pick List</h2>
+    <div class="card">
+      <label>Import from Excel (.xlsx)</label>
+      <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
+      <button class="btn primary" id="btnPickExcel">📊 Choose Excel File</button>
+      <div id="excelFileName" class="hint"></div>
+      <p class="hint">Expected columns: <b>Item Code</b>, <b>Item Name</b>, <b>Qty Required</b> — in that order, headers in row 1. Download the ready-made template below if you don't have one yet.</p>
+      <a href="pick_list_template.xlsx" download style="text-decoration:none;">
+        <button class="btn ghost sm" style="width:100%; margin-top:6px;">⬇ Download Template (.xlsx)</button>
+      </a>
+    </div>
+
+    <div class="divider-label">or paste manually</div>
+
+    <div class="card">
+      <label>Paste list — Item Code, Item Name, Qty (one per line)</label>
+      <textarea id="pickListInput" placeholder="RM-4501, Hex Bolt M6x20, 50&#10;RM-4502, Washer 6mm, 200&#10;RM-4503, Nut M6, 200"></textarea>
+      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. This replaces the current list.</p>
+      <div class="foot-actions">
+        <button class="btn primary" id="btnImportList">Load List</button>
+        <button class="btn danger sm" id="btnClearList" style="width:auto;">Clear</button>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top:22px;">Bin Master</h2>
+    <div class="card">
+      <label>Known bin IDs (one per line)</label>
+      <textarea id="binListInput" style="min-height:90px;"></textarea>
+      <div class="foot-actions">
+        <button class="btn primary" id="btnSaveBins">Save Bins</button>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top:22px;">Data</h2>
+    <div class="card">
+      <div class="foot-actions">
+        <button class="btn sm" id="btnExportCsv">Export Pick List CSV</button>
+        <button class="btn sm danger" id="btnResetAll">Reset Everything</button>
+      </div>
+      <p class="hint">Without Firebase configured, data is stored only on this device's browser. With Firebase configured (see Sync above), data lives in your pmsd-wms project and syncs across every device on the same Session ID. Host this file on GitHub Pages like your other tools to use it on your phone.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Confirm pick sheet -->
+<div class="sheet-backdrop" id="sheetBackdrop">
+  <div class="sheet">
+    <h3 id="sheetItemName">Item name</h3>
+    <div class="meta" id="sheetItemMeta">CODE &middot; Required 0 &middot; Picked 0</div>
+    <label>Quantity to pick now</label>
+    <div class="qty-stepper">
+      <button id="qtyMinus">−</button>
+      <input type="number" id="qtyInput" value="1">
+      <button id="qtyPlus">+</button>
+    </div>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnCancelPick">Cancel</button>
+      <button class="btn primary" id="btnConfirmPick">Confirm Pick</button>
+    </div>
+  </div>
+</div>
+
+<!-- Not found sheet -->
+<div class="sheet-backdrop" id="sheetNotFound">
+  <div class="sheet">
+    <h3>Not in pick list</h3>
+    <div class="meta" id="notFoundCode">CODE</div>
+    <p class="hint">This code doesn't match anything in the master pick list. You can still log it into the active bin, or ignore it and scan again.</p>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnIgnoreScan">Ignore</button>
+      <button class="btn primary" id="btnLogAnyway">Log to Bin Anyway</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =================================================================
+   FIREBASE CONFIG — paste your pmsd-wms project's config here.
+   Firebase Console > Project settings > General > Your apps > SDK setup.
+   Leave as-is to keep the app in local-only (single device) mode.
+   ================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCfUmCJqvmEcl_C7ChUURA-VxZa_yfJOdw",
+  authDomain: "pmsd-ims.firebaseapp.com",
+  projectId: "pmsd-ims",
+  storageBucket: "pmsd-ims.firebasestorage.app",
+  messagingSenderId: "68646491760",
+  appId: "1:68646491760:web:32d174a0cd66c8de5186b5"
+};
+const FIREBASE_ENABLED = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+/* ---------------- Local storage helpers ---------------- */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+};
+
+const DEFAULT_BINS = [
+  "RM-S644-B001","RM-S644-B002","RM-S644-B003","RM-S644-B004",
+  "RM-S531-B005","RM-S531-B006","RM-S531-B007","RM-S531-B008","RM-S531-B009","RM-S531-B010","RM-S531-B011","RM-S531-B012","RM-S531-B013","RM-S531-B014",
+  "RM-S439-B015","RM-S439-B016","RM-S439-B017","RM-S439-B018","RM-S439-B019","RM-S439-B020","RM-S439-B021","RM-S439-B022","RM-S439-B023","RM-S439-B024",
+  "RM-SPT-B025","RM-SPT-B026","RM-SPT-B027",
+  "RM-S531-B028",
+  "RM-SDB-B029","RM-SDB-B030"
+];
+
+let pickList = LS.get('wms_pick_list', []);
+let bins = LS.get('wms_bins', DEFAULT_BINS);
+let binLog = LS.get('wms_bin_log', {});
+let activeBin = LS.get('wms_active_bin', null);
+let sessionId = LS.get('wms_session_id', 'default');
+
+/* ---------------- Sync badge ---------------- */
+function setSyncBadge(state, text){
+  const el = document.getElementById('syncBadge');
+  el.className = 'sync-badge ' + state;
+  el.textContent = '● ' + text;
+  document.getElementById('syncStatusText').textContent = text;
+}
+
+/* ---------------- Firestore layer ---------------- */
+let db = null, fbReady = false, unsubscribeDoc = null;
+
+function sessionDocRef(){
+  return db.collection('pmsd_picking_sessions').doc(sessionId);
+}
+
+function initFirebase(){
+  document.getElementById('sessionIdInput').value = sessionId;
+  if(!FIREBASE_ENABLED){
+    setSyncBadge('offline', 'Local only');
+    saveAllLocal();
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    setSyncBadge('connecting', 'Connecting…');
+    firebase.auth().signInAnonymously().then(()=>{
+      fbReady = true;
+      document.getElementById('syncHint').textContent =
+        'Connected. Every device using the same Session ID above sees this pick list and bin log live.';
+      attachFirestoreListener();
+    }).catch(err=>{
+      setSyncBadge('offline', 'Auth failed');
+      toast('Firebase auth failed — check console', 'red');
+      console.error(err);
+    });
+  }catch(err){
+    setSyncBadge('offline', 'Config error');
+    console.error(err);
+  }
+}
+
+function attachFirestoreListener(){
+  if(unsubscribeDoc) unsubscribeDoc();
+  setSyncBadge('connecting', 'Syncing…');
+  unsubscribeDoc = sessionDocRef().onSnapshot(snap=>{
+    setSyncBadge('live', 'Live · ' + sessionId);
+    const data = snap.exists ? snap.data() : {};
+    pickList = data.pickList || [];
+    bins = (data.bins && data.bins.length) ? data.bins : DEFAULT_BINS;
+    binLog = data.binLog || {};
+    renderCurrentView();
+    refreshStats();
+  }, err=>{
+    setSyncBadge('offline', 'Sync error');
+    console.error(err);
+  });
+}
+
+document.getElementById('btnSetSession').addEventListener('click', ()=>{
+  const val = document.getElementById('sessionIdInput').value.trim();
+  if(!val){ toast('Enter a session ID', 'red'); return; }
+  sessionId = val;
+  LS.set('wms_session_id', sessionId);
+  if(FIREBASE_ENABLED && fbReady){
+    attachFirestoreListener();
+    toast('Joined session: ' + sessionId, 'green');
+  } else {
+    toast('Local mode — session ID has no effect until Firebase is configured', 'red');
+  }
+});
+
+function renderCurrentView(){
+  const activeTab = document.querySelector('nav.tabs button.active').dataset.tab;
+  if(activeTab === 'list') renderPickList();
+  if(activeTab === 'pending') renderPending();
+  if(activeTab === 'bin') renderBinSelect();
+  renderPickList(); // keep stats/list fresh even off-tab
+  renderScanPending(); // keep scan-screen name/qty preview fresh even off-tab
+}
+
+/* ---------------- Unified write operations ---------------- */
+function saveAllLocal(){
+  LS.set('wms_pick_list', pickList);
+  LS.set('wms_bins', bins);
+  LS.set('wms_bin_log', binLog);
+  LS.set('wms_active_bin', activeBin);
+}
+
+// Bulk overwrite (import list / save bins / clear / reset)
+function persistBulk(patch){
+  if(patch.pickList !== undefined) pickList = patch.pickList;
+  if(patch.bins !== undefined) bins = patch.bins;
+  if(patch.binLog !== undefined) binLog = patch.binLog;
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, bins, binLog }, { merge: true }).catch(err=>{
+      toast('Save failed — check connection', 'red'); console.error(err);
+    });
+  } else {
+    saveAllLocal();
+  }
+}
+
+// Atomic pick confirmation (transaction when online, direct mutation when local)
+function persistPick(code, qty, bin, itemNameForLog, ts){
+  const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString() };
+  if(FIREBASE_ENABLED && fbReady){
+    const ref = sessionDocRef();
+    db.runTransaction(tx => tx.get(ref).then(doc=>{
+      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+      const list = data.pickList || [];
+      const idx = list.findIndex(i => i.code.toLowerCase() === code.toLowerCase());
+      if(idx === -1) return; // item vanished — ignore
+      const remaining = list[idx].qtyReq - list[idx].qtyPicked;
+      const applyQty = Math.max(0, Math.min(qty, remaining));
+      list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
+      const log = data.binLog || {};
+      if(!log[bin]) log[bin] = [];
+      log[bin] = [...log[bin], logEntry];
+      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+    })).catch(err=>{ toast('Pick sync failed', 'red'); console.error(err); });
+  } else {
+    const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+    if(item){
+      const remaining = item.qtyReq - item.qtyPicked;
+      const applyQty = Math.max(0, Math.min(qty, remaining));
+      item.qtyPicked += applyQty;
+    }
+    if(!binLog[bin]) binLog[bin] = [];
+    binLog[bin].push(logEntry);
+    saveAllLocal();
+    renderCurrentView();
+    refreshStats();
+  }
+}
+
+// Reverse a previously confirmed pick (rollback wrong qty / wrong item)
+function persistUndo(pick){
+  if(!pick) return;
+  if(FIREBASE_ENABLED && fbReady){
+    const ref = sessionDocRef();
+    db.runTransaction(tx => tx.get(ref).then(doc=>{
+      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+      const list = data.pickList || [];
+      const idx = list.findIndex(i => i.code.toLowerCase() === pick.code.toLowerCase());
+      if(idx !== -1){
+        list[idx] = { ...list[idx], qtyPicked: Math.max(0, list[idx].qtyPicked - pick.qty) };
+      }
+      const log = data.binLog || {};
+      if(log[pick.bin]) log[pick.bin] = log[pick.bin].filter(e => e.ts !== pick.ts);
+      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+    })).then(()=>{
+      toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+    }).catch(err=>{ toast('Undo failed', 'red'); console.error(err); });
+  } else {
+    const item = pickList.find(i => i.code.toLowerCase() === pick.code.toLowerCase());
+    if(item){ item.qtyPicked = Math.max(0, item.qtyPicked - pick.qty); }
+    if(binLog[pick.bin]) binLog[pick.bin] = binLog[pick.bin].filter(e => e.ts !== pick.ts);
+    saveAllLocal();
+    renderCurrentView();
+    refreshStats();
+    toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+  }
+}
+
+
+// Log an unmatched scan straight to a bin (no pick-list item to update)
+function persistBinOnlyLog(bin, code, name, qty){
+  const logEntry = { code, name, qty, ts: new Date().toISOString() };
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({
+      binLog: { [bin]: firebase.firestore.FieldValue.arrayUnion(logEntry) }
+    }, { merge: true }).catch(err=>{ toast('Sync failed', 'red'); console.error(err); });
+  } else {
+    if(!binLog[bin]) binLog[bin] = [];
+    binLog[bin].push(logEntry);
+    saveAllLocal();
+    refreshStats();
+  }
+}
+
+/* ---------------- Toast ---------------- */
+let toastTimer;
+function toast(msg, kind){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (kind ? ' '+kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.className = '', 1800);
+  if(navigator.vibrate){ navigator.vibrate(kind === 'red' ? [60,40,60] : 40); }
+}
+
+/* ---------------- Tabs ---------------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'scan') renderScanPending();
+    if(btn.dataset.tab === 'list') renderPickList();
+    if(btn.dataset.tab === 'pending') renderPending();
+    if(btn.dataset.tab === 'bin') renderBinSelect();
+    if(btn.dataset.tab === 'setup') renderSetup();
+    stopAllScanners();
+  });
+});
+
+/* ---------------- Stats ---------------- */
+function refreshStats(){
+  const total = pickList.length;
+  const done = pickList.filter(i=>i.qtyPicked >= i.qtyReq).length;
+  const pending = total - done;
+  const binsUsed = Object.keys(binLog).filter(b => binLog[b] && binLog[b].length).length;
+  const elList = document.getElementById('tabCountList');
+  const elPending = document.getElementById('tabCountPending');
+  const elBin = document.getElementById('tabCountBin');
+  if(elList) elList.textContent = done + '/' + total;
+  if(elPending) elPending.textContent = pending;
+  if(elBin) elBin.textContent = binsUsed;
+}
+
+/* ---------------- Pick list rendering ---------------- */
+function pickRowHtml(item){
+  const isDone = item.qtyPicked >= item.qtyReq;
+  const isPartial = item.qtyPicked > 0 && !isDone;
+  const cls = isDone ? 'done' : (isPartial ? 'partial' : '');
+  return `<div class="prow ${cls}">
+    <div class="info">
+      <div class="code">${escapeHtml(item.code)}</div>
+      <div class="name">${escapeHtml(item.name || '')}</div>
+    </div>
+    <div class="qty">
+      <div class="frac"><span class="${isDone?'done-n':(isPartial?'partial-n':'')}">${item.qtyPicked}</span> / ${item.qtyReq}</div>
+      <div class="tag">${isDone ? 'complete' : 'qty'}</div>
+    </div>
+    ${isDone ? '<div class="badge-done">✓ DONE</div>' : ''}
+  </div>`;
+}
+
+function renderPickList(){
+  const c = document.getElementById('pickListContainer');
+  document.getElementById('listCount').textContent = pickList.length + ' items';
+  if(!pickList.length){
+    c.innerHTML = emptyHtml('📋','No pick list loaded','Go to Setup tab and paste your list.');
+    return;
+  }
+  c.innerHTML = pickList.map(pickRowHtml).join('');
+  refreshStats();
+}
+
+function renderPending(){
+  const c = document.getElementById('pendingContainer');
+  const pending = pickList.filter(i => i.qtyPicked < i.qtyReq);
+  document.getElementById('pendingCount').textContent = pending.length + ' remaining';
+  if(!pending.length){
+    c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item on the list has been fully picked.' : 'Load a pick list first.');
+    return;
+  }
+  c.innerHTML = pending.map(pickRowHtml).join('');
+}
+
+/* ---------------- Scan screen: name + qty preview ---------------- */
+function scanPendingRowHtml(item, isNext){
+  const remaining = item.qtyReq - item.qtyPicked;
+  return `<div class="spick-row${isNext ? ' next-target' : ''}">
+    <div class="info">
+      <div class="sname">${escapeHtml(item.name || item.code)}</div>
+      <div class="scode">${escapeHtml(item.code)}</div>
+    </div>
+    <div class="sqty">
+      <div class="n">${remaining}</div>
+      <div class="l">of ${item.qtyReq}</div>
+    </div>
+  </div>`;
+}
+
+function renderScanPending(){
+  const c = document.getElementById('scanPendingList');
+  if(!c) return;
+  const pending = pickList.filter(i => i.qtyPicked < i.qtyReq);
+  if(!pending.length){
+    c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item has been fully picked.' : 'Load a pick list first.');
+    return;
+  }
+  c.innerHTML = pending.map((item, idx) => scanPendingRowHtml(item, idx === 0)).join('');
+}
+
+function emptyHtml(glyph, title, sub){
+  return `<div class="empty"><div class="glyph">${glyph}</div><p style="font-weight:600;color:var(--ink)">${title}</p><p>${sub}</p></div>`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------------- Setup ---------------- */
+function renderSetup(){
+  document.getElementById('binListInput').value = bins.join('\n');
+}
+
+document.getElementById('btnImportList').addEventListener('click', ()=>{
+  const raw = document.getElementById('pickListInput').value.trim();
+  if(!raw){ toast('Paste a list first', 'red'); return; }
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const parsed = lines.map(line=>{
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const code = (parts[0]||'').trim();
+    const name = (parts[1]||'').trim();
+    const qty = parseFloat((parts[2]||'1').trim()) || 1;
+    return { code, name, qtyReq: qty, qtyPicked: 0 };
+  }).filter(i=>i.code);
+  if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
+  persistBulk({ pickList: parsed, binLog: {} });
+  hideLastPickBar();
+  document.getElementById('pickListInput').value = '';
+  toast(parsed.length + ' items loaded', 'green');
+  renderPickList(); renderScanPending();
+});
+
+document.getElementById('btnPickExcel').addEventListener('click', ()=>{
+  document.getElementById('excelFileInput').click();
+});
+
+document.getElementById('excelFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('excelFileName').textContent = 'Reading ' + file.name + ' …';
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('pick')) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      // skip header row (row 0) if first cell looks like a header word
+      let startRow = 0;
+      if(rows.length && String(rows[0][0]).toLowerCase().includes('item') ) startRow = 1;
+      const parsed = [];
+      for(let i = startRow; i < rows.length; i++){
+        const r = rows[i];
+        const code = String(r[0] ?? '').trim();
+        const name = String(r[1] ?? '').trim();
+        const qty = parseFloat(r[2]) || 0;
+        if(!code) continue;
+        parsed.push({ code, name, qtyReq: qty || 1, qtyPicked: 0 });
+      }
+      if(!parsed.length){
+        toast('No valid rows found in that sheet', 'red');
+        document.getElementById('excelFileName').textContent = '';
+        return;
+      }
+      persistBulk({ pickList: parsed, binLog: {} });
+      hideLastPickBar();
+      document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
+      toast(parsed.length + ' items imported', 'green');
+      renderPickList(); renderScanPending();
+    }catch(err){
+      toast('Could not read that file', 'red');
+      document.getElementById('excelFileName').textContent = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+document.getElementById('btnClearList').addEventListener('click', ()=>{
+  if(!confirm('Clear the entire pick list and bin log?')) return;
+  persistBulk({ pickList: [], binLog: {} });
+  hideLastPickBar();
+  renderPickList(); renderScanPending(); refreshStats();
+  toast('Pick list cleared');
+});
+
+document.getElementById('btnSaveBins').addEventListener('click', ()=>{
+  const raw = document.getElementById('binListInput').value.trim();
+  const newBins = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  persistBulk({ bins: newBins });
+  toast(newBins.length + ' bins saved', 'green');
+});
+
+document.getElementById('btnExportCsv').addEventListener('click', ()=>{
+  if(!pickList.length){ toast('Nothing to export', 'red'); return; }
+  let csv = 'Item Code,Item Name,Qty Required,Qty Picked,Status\n';
+  pickList.forEach(i=>{
+    csv += `${i.code},"${(i.name||'').replace(/"/g,'""')}",${i.qtyReq},${i.qtyPicked},${i.qtyPicked>=i.qtyReq?'Done':'Pending'}\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pick_list_export.csv';
+  a.click();
+});
+
+document.getElementById('btnResetAll').addEventListener('click', ()=>{
+  if(!confirm('This wipes pick list, bin log and bin master. Continue?')) return;
+  activeBin = null;
+  LS.set('wms_active_bin', null);
+  persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
+  hideLastPickBar();
+  renderPickList(); renderScanPending(); renderSetup(); refreshStats();
+  document.getElementById('activeBinLabel').textContent = 'Not set';
+  toast('All data reset');
+});
+
+/* ---------------- Active bin ---------------- */
+function setActiveBin(bin){
+  activeBin = bin;
+  LS.set('wms_active_bin', activeBin);
+  document.getElementById('activeBinLabel').textContent = bin || 'Not set';
+}
+setActiveBin(activeBin);
+
+document.getElementById('btnChangeBin').addEventListener('click', ()=>{
+  const list = bins.length ? bins : [];
+  const promptMsg = 'Enter Bin ID' + (list.length ? ('\n\nKnown: ' + list.slice(0,8).join(', ') + (list.length>8?'…':'')) : '');
+  const val = prompt(promptMsg, activeBin || '');
+  if(val && val.trim()){ setActiveBin(val.trim()); toast('Active bin: ' + val.trim(), 'green'); }
+});
+
+/* ---------------- Scanning (html5-qrcode) ---------------- */
+let scannerItem = null, scannerBin = null;
+
+function stopAllScanners(){
+  if(scannerItem){ scannerItem.stop().catch(()=>{}); scannerItem = null; document.getElementById('reader').style.display='none'; document.getElementById('btnStartItemScan').style.display=''; document.getElementById('btnStopScan').style.display='none'; }
+  if(scannerBin){ scannerBin.stop().catch(()=>{}); scannerBin = null; document.getElementById('readerBin').style.display='none'; }
+}
+
+document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
+  const readerEl = document.getElementById('reader');
+  readerEl.style.display = 'block';
+  document.getElementById('btnStartItemScan').style.display = 'none';
+  document.getElementById('btnStopScan').style.display = '';
+  scannerItem = new Html5Qrcode('reader');
+  scannerItem.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 240 } },
+    (decodedText)=>{ handleItemScan(decodedText.trim()); },
+    ()=>{}
+  ).catch(err=>{
+    toast('Camera error — check permission', 'red');
+    document.getElementById('btnStartItemScan').style.display='';
+    document.getElementById('btnStopScan').style.display='none';
+    readerEl.style.display='none';
+  });
+});
+
+document.getElementById('btnStopScan').addEventListener('click', stopAllScanners);
+
+document.getElementById('manualItemInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    const v = e.target.value.trim();
+    if(v){ handleItemScan(v); e.target.value=''; }
+  }
+});
+
+document.getElementById('btnScanBinView').addEventListener('click', ()=>{
+  const readerEl = document.getElementById('readerBin');
+  readerEl.style.display = 'block';
+  scannerBin = new Html5Qrcode('readerBin');
+  scannerBin.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText)=>{
+      scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display='none';
+      selectBinForView(decodedText.trim());
+    },
+    ()=>{}
+  ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
+});
+
+/* ---------------- Item scan → match logic ---------------- */
+let pendingScanCode = null;
+
+function handleItemScan(code){
+  if(!activeBin){
+    toast('Set an active bin first', 'red');
+    return;
+  }
+  const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+  if(!item){
+    pendingScanCode = code;
+    document.getElementById('notFoundCode').textContent = code;
+    document.getElementById('sheetNotFound').classList.add('open');
+    return;
+  }
+  if(item.qtyPicked >= item.qtyReq){
+    toast(item.code + ' already fully picked', 'red');
+    return;
+  }
+  openConfirmSheet(item);
+}
+
+let confirmItem = null;
+function openConfirmSheet(item){
+  confirmItem = item;
+  document.getElementById('sheetItemName').textContent = item.name || item.code;
+  document.getElementById('sheetItemMeta').textContent =
+    item.code + ' · Required ' + item.qtyReq + ' · Picked ' + item.qtyPicked;
+  const remaining = item.qtyReq - item.qtyPicked;
+  document.getElementById('qtyInput').value = remaining;
+  document.getElementById('qtyInput').max = remaining;
+  document.getElementById('sheetBackdrop').classList.add('open');
+}
+
+document.getElementById('qtyMinus').addEventListener('click', ()=>{
+  const inp = document.getElementById('qtyInput');
+  inp.value = Math.max(1, (parseInt(inp.value)||1) - 1);
+});
+document.getElementById('qtyPlus').addEventListener('click', ()=>{
+  const inp = document.getElementById('qtyInput');
+  const max = confirmItem ? (confirmItem.qtyReq - confirmItem.qtyPicked) : 999999;
+  inp.value = Math.min(max, (parseInt(inp.value)||1) + 1);
+});
+
+document.getElementById('btnCancelPick').addEventListener('click', ()=>{
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  confirmItem = null;
+});
+
+/* ---------------- Undo last pick ---------------- */
+let lastPick = null;
+function showLastPickBar(pick){
+  lastPick = pick;
+  document.getElementById('lastPickText').textContent = pick.qty + ' × ' + (pick.name || pick.code) + '  (' + pick.code + ')';
+  document.getElementById('lastPickBar').style.display = 'flex';
+}
+function hideLastPickBar(){
+  document.getElementById('lastPickBar').style.display = 'none';
+  lastPick = null;
+}
+document.getElementById('btnUndoLastPick').addEventListener('click', ()=>{
+  if(!lastPick) return;
+  persistUndo(lastPick);
+  hideLastPickBar();
+});
+
+document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
+  if(!confirmItem) return;
+  let qty = parseInt(document.getElementById('qtyInput').value) || 0;
+  const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
+  qty = Math.max(1, Math.min(qty, remaining));
+  const codeSnapshot = confirmItem.code, nameSnapshot = confirmItem.name;
+  const binSnapshot = activeBin;
+  const tsSnapshot = new Date().toISOString();
+  persistPick(codeSnapshot, qty, binSnapshot, nameSnapshot, tsSnapshot);
+  showLastPickBar({ code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  toast('Picked ' + qty + ' × ' + codeSnapshot, 'green');
+  confirmItem = null;
+});
+
+document.getElementById('btnIgnoreScan').addEventListener('click', ()=>{
+  document.getElementById('sheetNotFound').classList.remove('open');
+  pendingScanCode = null;
+});
+document.getElementById('btnLogAnyway').addEventListener('click', ()=>{
+  if(!pendingScanCode) return;
+  persistBinOnlyLog(activeBin, pendingScanCode, '(not on pick list)', 1);
+  toast('Logged ' + pendingScanCode + ' to ' + activeBin, 'green');
+  document.getElementById('sheetNotFound').classList.remove('open');
+  pendingScanCode = null;
+});
+
+/* ---------------- Bin view ---------------- */
+function renderBinSelect(){
+  const sel = document.getElementById('binSelectView');
+  const allBins = Array.from(new Set([...bins, ...Object.keys(binLog)]));
+  sel.innerHTML = '<option value="">— choose a bin —</option>' + allBins.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  sel.value = activeBin && allBins.includes(activeBin) ? activeBin : '';
+  renderBinContents(sel.value);
+}
+document.getElementById('binSelectView').addEventListener('change', (e)=> renderBinContents(e.target.value));
+
+function selectBinForView(bin){
+  renderBinSelect();
+  const sel = document.getElementById('binSelectView');
+  if(![...sel.options].some(o=>o.value===bin)){
+    const opt = document.createElement('option'); opt.value = bin; opt.textContent = bin;
+    sel.appendChild(opt);
+  }
+  sel.value = bin;
+  renderBinContents(bin);
+}
+
+function renderBinContents(bin){
+  const card = document.getElementById('binContentsCard');
+  if(!bin){
+    card.innerHTML = '<p class="hint">Select a bin above to view everything logged inside it.</p>';
+    return;
+  }
+  const entries = binLog[bin] || [];
+  if(!entries.length){
+    card.innerHTML = emptyHtml('📦','Bin is empty', 'No items logged into ' + escapeHtml(bin) + ' yet.');
+    return;
+  }
+  const totals = {};
+  entries.forEach(e=>{ totals[e.code] = (totals[e.code]||0) + e.qty; });
+  const totalsHtml = Object.entries(totals).map(([code, qty])=>
+    `<div class="bin-entry"><span class="code">${escapeHtml(code)}</span><span>${qty} pcs</span></div>`
+  ).join('');
+  const logHtml = entries.slice().reverse().map(e=>
+    `<div class="bin-entry"><span>${escapeHtml(e.code)} <span style="color:var(--ink-dim)">×${e.qty}</span></span><span class="t">${new Date(e.ts).toLocaleString()}</span></div>`
+  ).join('');
+  card.innerHTML =
+    `<label>Totals in this bin</label>${totalsHtml}` +
+    `<label style="margin-top:14px;">Activity log</label>${logHtml}`;
+}
+
+/* ---------------- Init ---------------- */
+renderPickList();
+renderPending();
+renderScanPending();
+refreshStats();
+initFirebase();
+</script>
+</body>
+</html>
