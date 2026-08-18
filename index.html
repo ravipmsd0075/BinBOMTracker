@@ -414,6 +414,7 @@
         <button class="btn sm" id="btnSetPicker" style="width:auto;">Save</button>
       </div>
       <p class="hint">Shown in the activity log and picker summary so you can see who picked what and how much.</p>
+      <label class="checkline"><input type="checkbox" id="scanFeedbackCheck" checked> Beep + vibrate on every scan</label>
     </div>
 
     <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
@@ -921,7 +922,14 @@ function escapeHtml(s){
 function renderSetup(){
   document.getElementById('binListInput').value = bins.join('\n');
   document.getElementById('pickerNameInput').value = pickerName;
+  document.getElementById('scanFeedbackCheck').checked = scanFeedbackEnabled;
 }
+
+document.getElementById('scanFeedbackCheck').addEventListener('change', (e)=>{
+  scanFeedbackEnabled = e.target.checked;
+  LS.set('wms_scan_feedback', scanFeedbackEnabled);
+  if(scanFeedbackEnabled) scanFeedback('ok'); // quick sample so they know it's on
+});
 
 function renderPickerBadge(){
   const el = document.getElementById('pickerBadge');
@@ -1111,6 +1119,7 @@ document.getElementById('btnScanActiveBin').addEventListener('click', ()=>{
     (decodedText)=>{
       scannerActiveBin.stop().catch(()=>{}); scannerActiveBin = null; readerEl.style.display='none';
       const bin = decodedText.trim();
+      scanFeedback('ok');
       setActiveBin(bin);
       toast('Active bin: ' + bin, 'green');
     },
@@ -1118,13 +1127,58 @@ document.getElementById('btnScanActiveBin').addEventListener('click', ()=>{
   ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
 });
 
+/* ---------------- Scan feedback: beep + vibrate ---------------- */
+let scanFeedbackEnabled = LS.get('wms_scan_feedback', true);
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+  }
+  return audioCtx;
+}
+function beep(freq, duration){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  if(ctx.state === 'suspended'){ ctx.resume().catch(()=>{}); }
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  const now = ctx.currentTime;
+  gain.gain.setValueAtTime(0.28, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration / 1000);
+  osc.start(now);
+  osc.stop(now + duration / 1000 + 0.03);
+}
+function scanFeedback(kind){
+  // kind: 'ok' (matched, item/bin confirmed) or 'warn' (not found / already picked / no bin set)
+  if(!scanFeedbackEnabled) return;
+  if(kind === 'ok'){
+    beep(1050, 110);
+    if(navigator.vibrate){ try{ navigator.vibrate(50); }catch(e){} }
+  } else {
+    beep(280, 190);
+    if(navigator.vibrate){ try{ navigator.vibrate([70, 60, 70]); }catch(e){} }
+  }
+}
+
 /* ---------------- Scanning (html5-qrcode) ---------------- */
 let scannerItem = null, scannerBin = null, scannerActiveBin = null;
+let itemScanBusy = false; // true while a scanned code's confirm/not-found sheet is open, so we don't fire again on the same code still in frame
+
+function resumeItemScanner(){
+  itemScanBusy = false;
+  if(scannerItem){
+    try{ scannerItem.resume(); }catch(e){}
+  }
+}
 
 function stopAllScanners(){
   if(scannerItem){ scannerItem.stop().catch(()=>{}); scannerItem = null; document.getElementById('reader').style.display='none'; document.getElementById('btnStartItemScan').style.display=''; document.getElementById('btnStopScan').style.display='none'; }
   if(scannerBin){ scannerBin.stop().catch(()=>{}); scannerBin = null; document.getElementById('readerBin').style.display='none'; }
   if(scannerActiveBin){ scannerActiveBin.stop().catch(()=>{}); scannerActiveBin = null; document.getElementById('readerActiveBin').style.display='none'; }
+  itemScanBusy = false;
 }
 
 document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
@@ -1136,7 +1190,12 @@ document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
   scannerItem.start(
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: 240, height: 240 } },
-    (decodedText)=>{ handleItemScan(decodedText.trim()); },
+    (decodedText)=>{
+      if(itemScanBusy) return; // ignore repeat detections while a sheet is open for the last scan
+      itemScanBusy = true;
+      try{ scannerItem && scannerItem.pause(true); }catch(e){}
+      handleItemScan(decodedText.trim());
+    },
     ()=>{}
   ).catch(err=>{
     toast('Camera error — check permission', 'red');
@@ -1164,6 +1223,7 @@ document.getElementById('btnScanBinView').addEventListener('click', ()=>{
     { fps: 10, qrbox: { width: 220, height: 220 } },
     (decodedText)=>{
       scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display='none';
+      scanFeedback('ok');
       selectBinForView(decodedText.trim());
     },
     ()=>{}
@@ -1191,10 +1251,13 @@ function findPickListItem(scanned){
 function handleItemScan(code){
   if(!activeBin){
     toast('Set an active bin first', 'red');
+    scanFeedback('warn');
+    resumeItemScanner();
     return;
   }
   const item = findPickListItem(code);
   if(!item){
+    scanFeedback('warn');
     pendingScanCode = code;
     document.getElementById('notFoundCode').textContent = code;
     document.getElementById('sheetNotFound').classList.add('open');
@@ -1202,8 +1265,11 @@ function handleItemScan(code){
   }
   if(item.qtyPicked >= item.qtyReq){
     toast(item.code + ' already fully picked', 'red');
+    scanFeedback('warn');
+    resumeItemScanner();
     return;
   }
+  scanFeedback('ok');
   openConfirmSheet(item);
 }
 
@@ -1232,6 +1298,7 @@ document.getElementById('qtyPlus').addEventListener('click', ()=>{
 document.getElementById('btnCancelPick').addEventListener('click', ()=>{
   document.getElementById('sheetBackdrop').classList.remove('open');
   confirmItem = null;
+  resumeItemScanner();
 });
 
 /* ---------------- Undo last pick ---------------- */
@@ -1269,11 +1336,13 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   document.getElementById('sheetBackdrop').classList.remove('open');
   toast('Picked ' + qty + ' × ' + codeSnapshot + ' — ' + pickerName, 'green');
   confirmItem = null;
+  resumeItemScanner();
 });
 
 document.getElementById('btnIgnoreScan').addEventListener('click', ()=>{
   document.getElementById('sheetNotFound').classList.remove('open');
   pendingScanCode = null;
+  resumeItemScanner();
 });
 document.getElementById('btnLogAnyway').addEventListener('click', ()=>{
   if(!pendingScanCode) return;
@@ -1281,6 +1350,7 @@ document.getElementById('btnLogAnyway').addEventListener('click', ()=>{
   toast('Logged ' + pendingScanCode + ' to ' + activeBin, 'green');
   document.getElementById('sheetNotFound').classList.remove('open');
   pendingScanCode = null;
+  resumeItemScanner();
 });
 
 /* ---------------- Bin view ---------------- */
