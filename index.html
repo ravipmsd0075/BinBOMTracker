@@ -428,6 +428,11 @@
     </div>
 
     <h2 class="section-title">Import Pick List</h2>
+    <div class="card" id="dupeCodeWarning" style="display:none; border-color: var(--red);">
+      <label style="color:var(--red);">⚠ Duplicate item codes found</label>
+      <div id="dupeCodeList" style="margin-top:6px;"></div>
+      <p class="hint">Two or more different items are sharing the same code, so a scan of one could get logged as progress on the wrong row. Give each item its own unique code in your sheet and re-import.</p>
+    </div>
     <div class="card">
       <label>Import from Excel (.xlsx)</label>
       <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
@@ -444,7 +449,7 @@
       <label>Paste list — Item Code, Item Name, Qty (one per line)</label>
       <textarea id="pickListInput" placeholder="RM-4501, Hex Bolt M6x20, 50&#10;RM-4502, Washer 6mm, 200&#10;RM-4503, Nut M6, 200"></textarea>
       <label class="checkline"><input type="checkbox" id="pasteMergeCheck"> Add to existing list instead of replacing it</label>
-      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. Unchecked = replaces the current list. Checked = new codes are added and repeated codes just top up the required qty, without touching progress already picked.</p>
+      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. Unchecked = replaces the current list. Checked = new codes are added and repeated codes just top up the required qty, without touching progress already picked. Each item should have its own unique code.</p>
       <div class="foot-actions">
         <button class="btn primary" id="btnImportList">Load List</button>
         <button class="btn danger sm" id="btnClearList" style="width:auto;">Clear</button>
@@ -543,6 +548,22 @@ let activeBin = LS.get('wms_active_bin', null);
 let sessionId = LS.get('wms_session_id', 'default');
 let pickerName = LS.get('wms_picker_name', '');
 
+// Migration: lists saved before item ids existed won't have them — backfill so
+// pick/undo always target the exact row scanned, even when codes repeat.
+function ensureItemIds(list){
+  let changed = false;
+  const withIds = (list || []).map(item => {
+    if(item && !item.id){ changed = true; return { ...item, id: genId() }; }
+    return item;
+  });
+  return { list: withIds, changed };
+}
+{
+  const migrated = ensureItemIds(pickList);
+  pickList = migrated.list;
+  if(migrated.changed) saveAllLocal();
+}
+
 /* ---------------- Sync badge ---------------- */
 function setSyncBadge(state, text){
   const el = document.getElementById('syncBadge');
@@ -591,9 +612,14 @@ function attachFirestoreListener(){
   unsubscribeDoc = sessionDocRef().onSnapshot(snap=>{
     setSyncBadge('live', 'Live · ' + sessionId);
     const data = snap.exists ? snap.data() : {};
-    pickList = data.pickList || [];
+    const migrated = ensureItemIds(data.pickList || []);
+    pickList = migrated.list;
     bins = (data.bins && data.bins.length) ? data.bins : DEFAULT_BINS;
     binLog = data.binLog || {};
+    if(migrated.changed){
+      // push the backfilled ids back up so every connected device converges on the same ids
+      sessionDocRef().set({ pickList }, { merge: true }).catch(()=>{});
+    }
     renderCurrentView();
     refreshStats();
   }, err=>{
@@ -622,6 +648,7 @@ function renderCurrentView(){
   if(activeTab === 'bin') renderBinSelect();
   renderPickList(); // keep stats/list fresh even off-tab
   renderScanPending(); // keep scan-screen name/qty preview fresh even off-tab
+  renderDuplicateCodeWarning(); // flag any code reused across different items, wherever the data came from
 }
 
 /* ---------------- Unified write operations ---------------- */
@@ -647,14 +674,17 @@ function persistBulk(patch){
 }
 
 // Atomic pick confirmation (transaction when online, direct mutation when local)
-function persistPick(code, qty, bin, itemNameForLog, ts){
+// Looks up the item by its internal unique id — NOT by code, because master lists
+// sometimes reuse the same "code" (e.g. group letters like "A"/"B") across many
+// different items, which would otherwise update the wrong row.
+function persistPick(id, code, qty, bin, itemNameForLog, ts){
   const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString(), picker: pickerName || 'Unknown' };
   if(FIREBASE_ENABLED && fbReady){
     const ref = sessionDocRef();
     db.runTransaction(tx => tx.get(ref).then(doc=>{
       const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
       const list = data.pickList || [];
-      const idx = list.findIndex(i => i.code.toLowerCase() === code.toLowerCase());
+      const idx = list.findIndex(i => i.id === id);
       if(idx === -1) return; // item vanished — ignore
       const remaining = list[idx].qtyReq - list[idx].qtyPicked;
       const applyQty = Math.max(0, Math.min(qty, remaining));
@@ -665,7 +695,7 @@ function persistPick(code, qty, bin, itemNameForLog, ts){
       tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
     })).catch(err=>{ toast('Pick sync failed', 'red'); console.error(err); });
   } else {
-    const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+    const item = pickList.find(i => i.id === id);
     if(item){
       const remaining = item.qtyReq - item.qtyPicked;
       const applyQty = Math.max(0, Math.min(qty, remaining));
@@ -679,7 +709,7 @@ function persistPick(code, qty, bin, itemNameForLog, ts){
   }
 }
 
-// Reverse a previously confirmed pick (rollback wrong qty / wrong item)
+// Reverse a previously confirmed pick (rollback wrong qty / wrong item) — also by id
 function persistUndo(pick){
   if(!pick) return;
   if(FIREBASE_ENABLED && fbReady){
@@ -687,7 +717,7 @@ function persistUndo(pick){
     db.runTransaction(tx => tx.get(ref).then(doc=>{
       const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
       const list = data.pickList || [];
-      const idx = list.findIndex(i => i.code.toLowerCase() === pick.code.toLowerCase());
+      const idx = list.findIndex(i => i.id === pick.id);
       if(idx !== -1){
         list[idx] = { ...list[idx], qtyPicked: Math.max(0, list[idx].qtyPicked - pick.qty) };
       }
@@ -698,7 +728,7 @@ function persistUndo(pick){
       toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
     }).catch(err=>{ toast('Undo failed', 'red'); console.error(err); });
   } else {
-    const item = pickList.find(i => i.code.toLowerCase() === pick.code.toLowerCase());
+    const item = pickList.find(i => i.id === pick.id);
     if(item){ item.qtyPicked = Math.max(0, item.qtyPicked - pick.qty); }
     if(binLog[pick.bin]) binLog[pick.bin] = binLog[pick.bin].filter(e => e.ts !== pick.ts);
     saveAllLocal();
@@ -918,11 +948,49 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// Unique per-item id — master lists sometimes reuse the same "code" (e.g. group
+// letters like "A"/"B") across many different items, so we can't use code as identity.
+let idCounter = 0;
+function genId(){
+  idCounter += 1;
+  return 'i' + Date.now().toString(36) + idCounter.toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
 /* ---------------- Setup ---------------- */
+// Find codes that are shared by two or more items that are actually different
+// (different names). Same code + same name is fine (that's just a qty top-up).
+function findDuplicateCodeConflicts(list){
+  const byCode = {};
+  (list || []).forEach(item => {
+    if(!item || !item.code) return;
+    const key = item.code.toLowerCase();
+    if(!byCode[key]) byCode[key] = { code: item.code, names: new Map() };
+    const nameKey = normalizeForMatch(item.name) || '(no name)';
+    if(!byCode[key].names.has(nameKey)) byCode[key].names.set(nameKey, item.name || '(no name)');
+  });
+  return Object.values(byCode).filter(g => g.names.size > 1);
+}
+
+function renderDuplicateCodeWarning(){
+  const card = document.getElementById('dupeCodeWarning');
+  const listEl = document.getElementById('dupeCodeList');
+  const conflicts = findDuplicateCodeConflicts(pickList);
+  if(!conflicts.length){
+    card.style.display = 'none';
+    listEl.innerHTML = '';
+    return;
+  }
+  listEl.innerHTML = conflicts.map(g =>
+    `<div class="bin-entry"><span class="code">${escapeHtml(g.code)}</span><span style="text-align:right; color:var(--ink-dim);">${[...g.names.values()].map(escapeHtml).join(', ')}</span></div>`
+  ).join('');
+  card.style.display = 'block';
+}
+
 function renderSetup(){
   document.getElementById('binListInput').value = bins.join('\n');
   document.getElementById('pickerNameInput').value = pickerName;
   document.getElementById('scanFeedbackCheck').checked = scanFeedbackEnabled;
+  renderDuplicateCodeWarning();
 }
 
 document.getElementById('scanFeedbackCheck').addEventListener('change', (e)=>{
@@ -957,19 +1025,21 @@ document.getElementById('btnSetPicker').addEventListener('click', ()=>{
 });
 
 // Merge newly parsed rows into the existing pick list without losing progress:
-// existing codes just get their required qty topped up; new codes are appended.
+// existing rows (matched by code+name together, since code alone can repeat
+// across unrelated items) just get their required qty topped up; new rows are appended.
 function mergeIntoPickList(parsed){
   const merged = pickList.map(i => ({ ...i }));
+  const mergeKey = (code, name) => code.toLowerCase() + '||' + normalizeForMatch(name);
   const index = {};
-  merged.forEach((i, idx) => { index[i.code.toLowerCase()] = idx; });
+  merged.forEach((i, idx) => { index[mergeKey(i.code, i.name)] = idx; });
   parsed.forEach(row => {
-    const key = row.code.toLowerCase();
+    const key = mergeKey(row.code, row.name);
     if(index.hasOwnProperty(key)){
       const existing = merged[index[key]];
       existing.qtyReq += row.qtyReq;
       if(row.name && !existing.name) existing.name = row.name;
     } else {
-      merged.push({ code: row.code, name: row.name, qtyReq: row.qtyReq, qtyPicked: 0 });
+      merged.push({ id: genId(), code: row.code, name: row.name, qtyReq: row.qtyReq, qtyPicked: 0 });
       index[key] = merged.length - 1;
     }
   });
@@ -985,7 +1055,7 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
     const code = (parts[0]||'').trim();
     const name = (parts[1]||'').trim();
     const qty = parseFloat((parts[2]||'1').trim()) || 1;
-    return { code, name, qtyReq: qty, qtyPicked: 0 };
+    return { id: genId(), code, name, qtyReq: qty, qtyPicked: 0 };
   }).filter(i=>i.code);
   if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
   const merging = document.getElementById('pasteMergeCheck').checked;
@@ -998,7 +1068,7 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
     toast(parsed.length + ' items loaded', 'green');
   }
   document.getElementById('pickListInput').value = '';
-  renderPickList(); renderScanPending();
+  renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
 });
 
 document.getElementById('btnPickExcel').addEventListener('click', ()=>{
@@ -1027,7 +1097,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
         const name = String(r[1] ?? '').trim();
         const qty = parseFloat(r[2]) || 0;
         if(!code) continue;
-        parsed.push({ code, name, qtyReq: qty || 1, qtyPicked: 0 });
+        parsed.push({ id: genId(), code, name, qtyReq: qty || 1, qtyPicked: 0 });
       }
       if(!parsed.length){
         toast('No valid rows found in that sheet', 'red');
@@ -1045,7 +1115,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
         document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
         toast(parsed.length + ' items imported', 'green');
       }
-      renderPickList(); renderScanPending();
+      renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
     }catch(err){
       toast('Could not read that file', 'red');
       document.getElementById('excelFileName').textContent = '';
@@ -1059,7 +1129,7 @@ document.getElementById('btnClearList').addEventListener('click', ()=>{
   if(!confirm('Clear the entire pick list and bin log?')) return;
   persistBulk({ pickList: [], binLog: {} });
   hideLastPickBar();
-  renderPickList(); renderScanPending(); refreshStats();
+  renderPickList(); renderScanPending(); refreshStats(); renderDuplicateCodeWarning();
   toast('Pick list cleared');
 });
 
@@ -1328,11 +1398,11 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   let qty = parseInt(document.getElementById('qtyInput').value) || 0;
   const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
   qty = Math.max(1, Math.min(qty, remaining));
-  const codeSnapshot = confirmItem.code, nameSnapshot = confirmItem.name;
+  const idSnapshot = confirmItem.id, codeSnapshot = confirmItem.code, nameSnapshot = confirmItem.name;
   const binSnapshot = activeBin;
   const tsSnapshot = new Date().toISOString();
-  persistPick(codeSnapshot, qty, binSnapshot, nameSnapshot, tsSnapshot);
-  showLastPickBar({ code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
+  persistPick(idSnapshot, codeSnapshot, qty, binSnapshot, nameSnapshot, tsSnapshot);
+  showLastPickBar({ id: idSnapshot, code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
   document.getElementById('sheetBackdrop').classList.remove('open');
   toast('Picked ' + qty + ' × ' + codeSnapshot + ' — ' + pickerName, 'green');
   confirmItem = null;
