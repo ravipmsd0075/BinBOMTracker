@@ -268,6 +268,11 @@
     display:flex; gap:8px; margin-top: 14px;
   }
   .hint{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin-top:8px; }
+  .checkline{
+    display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-dim);
+    margin-top:9px; cursor:pointer;
+  }
+  .checkline input{ width:15px; height:15px; accent-color: var(--amber); flex-shrink:0; }
   .divider-label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-dim); text-align:center; margin: 12px 0; position:relative; }
   .divider-label::before, .divider-label::after{ content:""; position:absolute; top:50%; width:38%; height:1px; background:var(--line); }
   .divider-label::before{ left:0; } .divider-label::after{ right:0; }
@@ -290,7 +295,10 @@
       <h1>Picking List</h1>
       <div class="sub">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
     </div>
-    <div id="syncBadge" class="sync-badge offline">● Local only</div>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+      <div id="syncBadge" class="sync-badge offline">● Local only</div>
+      <div id="pickerBadge" class="sync-badge offline" style="cursor:pointer;">👤 Set picker</div>
+    </div>
   </div>
 </header>
 
@@ -377,10 +385,23 @@
     <div class="card" id="binContentsCard">
       <p class="hint">Select a bin above to view everything logged inside it.</p>
     </div>
+
+    <h2 class="section-title" style="margin-top:22px;">Picker Summary <span class="count">who picked what, all bins</span></h2>
+    <div class="card" id="pickerSummaryCard"></div>
   </section>
 
   <!-- ===================== SETUP ===================== -->
   <section class="view" id="view-setup">
+    <h2 class="section-title">Picker</h2>
+    <div class="card">
+      <label>Your name (tagged on every pick you confirm)</label>
+      <div class="row">
+        <input type="text" id="pickerNameInput" placeholder="e.g. Ravi">
+        <button class="btn sm" id="btnSetPicker" style="width:auto;">Save</button>
+      </div>
+      <p class="hint">Shown in the activity log and picker summary so you can see who picked what and how much.</p>
+    </div>
+
     <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
     <div class="card">
       <label>Session ID (same on every device to share data)</label>
@@ -397,6 +418,7 @@
       <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
       <button class="btn primary" id="btnPickExcel">📊 Choose Excel File</button>
       <div id="excelFileName" class="hint"></div>
+      <label class="checkline"><input type="checkbox" id="excelMergeCheck"> Add to existing list instead of replacing it</label>
       <p class="hint">Expected columns: <b>Item Code</b>, <b>Item Name</b>, <b>Qty Required</b> — in that order, headers in row 1. Download the ready-made template below if you don't have one yet.</p>
       <a href="pick_list_template.xlsx" download style="text-decoration:none;">
         <button class="btn ghost sm" style="width:100%; margin-top:6px;">⬇ Download Template (.xlsx)</button>
@@ -408,7 +430,8 @@
     <div class="card">
       <label>Paste list — Item Code, Item Name, Qty (one per line)</label>
       <textarea id="pickListInput" placeholder="RM-4501, Hex Bolt M6x20, 50&#10;RM-4502, Washer 6mm, 200&#10;RM-4503, Nut M6, 200"></textarea>
-      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. This replaces the current list.</p>
+      <label class="checkline"><input type="checkbox" id="pasteMergeCheck"> Add to existing list instead of replacing it</label>
+      <p class="hint">Paste directly from Excel (tab-separated) or type comma-separated. Unchecked = replaces the current list. Checked = new codes are added and repeated codes just top up the required qty, without touching progress already picked.</p>
       <div class="foot-actions">
         <button class="btn primary" id="btnImportList">Load List</button>
         <button class="btn danger sm" id="btnClearList" style="width:auto;">Clear</button>
@@ -505,6 +528,7 @@ let bins = LS.get('wms_bins', DEFAULT_BINS);
 let binLog = LS.get('wms_bin_log', {});
 let activeBin = LS.get('wms_active_bin', null);
 let sessionId = LS.get('wms_session_id', 'default');
+let pickerName = LS.get('wms_picker_name', '');
 
 /* ---------------- Sync badge ---------------- */
 function setSyncBadge(state, text){
@@ -611,7 +635,7 @@ function persistBulk(patch){
 
 // Atomic pick confirmation (transaction when online, direct mutation when local)
 function persistPick(code, qty, bin, itemNameForLog, ts){
-  const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString() };
+  const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString(), picker: pickerName || 'Unknown' };
   if(FIREBASE_ENABLED && fbReady){
     const ref = sessionDocRef();
     db.runTransaction(tx => tx.get(ref).then(doc=>{
@@ -805,6 +829,52 @@ function escapeHtml(s){
 /* ---------------- Setup ---------------- */
 function renderSetup(){
   document.getElementById('binListInput').value = bins.join('\n');
+  document.getElementById('pickerNameInput').value = pickerName;
+}
+
+function renderPickerBadge(){
+  const el = document.getElementById('pickerBadge');
+  if(!el) return;
+  if(pickerName){
+    el.textContent = '👤 ' + pickerName;
+    el.classList.remove('offline');
+  } else {
+    el.textContent = '👤 Set picker';
+    el.classList.add('offline');
+  }
+}
+document.getElementById('pickerBadge').addEventListener('click', ()=>{
+  document.querySelector('nav.tabs button[data-tab="setup"]').click();
+  setTimeout(()=> document.getElementById('pickerNameInput').focus(), 150);
+});
+
+document.getElementById('btnSetPicker').addEventListener('click', ()=>{
+  const val = document.getElementById('pickerNameInput').value.trim();
+  if(!val){ toast('Enter a name first', 'red'); return; }
+  pickerName = val;
+  LS.set('wms_picker_name', pickerName);
+  toast('Picker set to ' + pickerName, 'green');
+  renderPickerBadge();
+});
+
+// Merge newly parsed rows into the existing pick list without losing progress:
+// existing codes just get their required qty topped up; new codes are appended.
+function mergeIntoPickList(parsed){
+  const merged = pickList.map(i => ({ ...i }));
+  const index = {};
+  merged.forEach((i, idx) => { index[i.code.toLowerCase()] = idx; });
+  parsed.forEach(row => {
+    const key = row.code.toLowerCase();
+    if(index.hasOwnProperty(key)){
+      const existing = merged[index[key]];
+      existing.qtyReq += row.qtyReq;
+      if(row.name && !existing.name) existing.name = row.name;
+    } else {
+      merged.push({ code: row.code, name: row.name, qtyReq: row.qtyReq, qtyPicked: 0 });
+      index[key] = merged.length - 1;
+    }
+  });
+  return merged;
 }
 
 document.getElementById('btnImportList').addEventListener('click', ()=>{
@@ -819,10 +889,16 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
     return { code, name, qtyReq: qty, qtyPicked: 0 };
   }).filter(i=>i.code);
   if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
-  persistBulk({ pickList: parsed, binLog: {} });
-  hideLastPickBar();
+  const merging = document.getElementById('pasteMergeCheck').checked;
+  if(merging){
+    persistBulk({ pickList: mergeIntoPickList(parsed) }); // binLog untouched, progress kept
+    toast(parsed.length + ' rows added to the existing list', 'green');
+  } else {
+    persistBulk({ pickList: parsed, binLog: {} });
+    hideLastPickBar();
+    toast(parsed.length + ' items loaded', 'green');
+  }
   document.getElementById('pickListInput').value = '';
-  toast(parsed.length + ' items loaded', 'green');
   renderPickList(); renderScanPending();
 });
 
@@ -859,10 +935,17 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
         document.getElementById('excelFileName').textContent = '';
         return;
       }
-      persistBulk({ pickList: parsed, binLog: {} });
-      hideLastPickBar();
-      document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
-      toast(parsed.length + ' items imported', 'green');
+      const merging = document.getElementById('excelMergeCheck').checked;
+      if(merging){
+        persistBulk({ pickList: mergeIntoPickList(parsed) }); // binLog untouched, progress kept
+        document.getElementById('excelFileName').textContent = '✓ Added ' + parsed.length + ' rows from ' + file.name;
+        toast(parsed.length + ' rows added to the existing list', 'green');
+      } else {
+        persistBulk({ pickList: parsed, binLog: {} });
+        hideLastPickBar();
+        document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
+        toast(parsed.length + ' items imported', 'green');
+      }
       renderPickList(); renderScanPending();
     }catch(err){
       toast('Could not read that file', 'red');
@@ -1046,6 +1129,11 @@ document.getElementById('btnUndoLastPick').addEventListener('click', ()=>{
 
 document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   if(!confirmItem) return;
+  if(!pickerName){
+    toast('Set your picker name in Setup first', 'red');
+    document.getElementById('pickerBadge').click();
+    return;
+  }
   let qty = parseInt(document.getElementById('qtyInput').value) || 0;
   const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
   qty = Math.max(1, Math.min(qty, remaining));
@@ -1055,7 +1143,7 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   persistPick(codeSnapshot, qty, binSnapshot, nameSnapshot, tsSnapshot);
   showLastPickBar({ code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
   document.getElementById('sheetBackdrop').classList.remove('open');
-  toast('Picked ' + qty + ' × ' + codeSnapshot, 'green');
+  toast('Picked ' + qty + ' × ' + codeSnapshot + ' — ' + pickerName, 'green');
   confirmItem = null;
 });
 
@@ -1078,6 +1166,7 @@ function renderBinSelect(){
   sel.innerHTML = '<option value="">— choose a bin —</option>' + allBins.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
   sel.value = activeBin && allBins.includes(activeBin) ? activeBin : '';
   renderBinContents(sel.value);
+  renderPickerSummary();
 }
 document.getElementById('binSelectView').addEventListener('change', (e)=> renderBinContents(e.target.value));
 
@@ -1109,14 +1198,41 @@ function renderBinContents(bin){
     `<div class="bin-entry"><span class="code">${escapeHtml(code)}</span><span>${qty} pcs</span></div>`
   ).join('');
   const logHtml = entries.slice().reverse().map(e=>
-    `<div class="bin-entry"><span>${escapeHtml(e.code)} <span style="color:var(--ink-dim)">×${e.qty}</span></span><span class="t">${new Date(e.ts).toLocaleString()}</span></div>`
+    `<div class="bin-entry"><span>${escapeHtml(e.code)} <span style="color:var(--ink-dim)">×${e.qty}</span></span>` +
+    `<span class="t">${escapeHtml(e.picker || 'Unknown')} · ${new Date(e.ts).toLocaleString()}</span></div>`
   ).join('');
   card.innerHTML =
     `<label>Totals in this bin</label>${totalsHtml}` +
     `<label style="margin-top:14px;">Activity log</label>${logHtml}`;
 }
 
+/* ---------------- Picker summary: who picked what, across all bins ---------------- */
+function renderPickerSummary(){
+  const card = document.getElementById('pickerSummaryCard');
+  if(!card) return;
+  const totals = {}; // picker -> { qty, items: Set, picks: count }
+  Object.values(binLog).forEach(entries=>{
+    (entries||[]).forEach(e=>{
+      const p = e.picker || 'Unknown';
+      if(!totals[p]) totals[p] = { qty:0, items:new Set(), picks:0 };
+      totals[p].qty += e.qty;
+      totals[p].items.add(e.code);
+      totals[p].picks += 1;
+    });
+  });
+  const names = Object.keys(totals).sort((a,b)=> totals[b].qty - totals[a].qty);
+  if(!names.length){
+    card.innerHTML = emptyHtml('👤','No picks yet', 'Once picks are confirmed, each picker\'s totals show up here.');
+    return;
+  }
+  card.innerHTML = names.map(n=>{
+    const t = totals[n];
+    return `<div class="bin-entry"><span><b>${escapeHtml(n)}</b> <span style="color:var(--ink-dim)">· ${t.picks} scan${t.picks===1?'':'s'} · ${t.items.size} SKU${t.items.size===1?'':'s'}</span></span><span>${t.qty} pcs</span></div>`;
+  }).join('');
+}
+
 /* ---------------- Init ---------------- */
+renderPickerBadge();
 renderPickList();
 renderPending();
 renderScanPending();
