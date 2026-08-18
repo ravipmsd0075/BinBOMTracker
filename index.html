@@ -1173,12 +1173,27 @@ document.getElementById('btnScanBinView').addEventListener('click', ()=>{
 /* ---------------- Item scan → match logic ---------------- */
 let pendingScanCode = null;
 
+function normalizeForMatch(s){
+  return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Labels sometimes carry two QR codes — one for the item CODE, one for the item NAME.
+// Try matching the scanned text against code first; if nothing matches, fall back to name.
+function findPickListItem(scanned){
+  const scannedLower = (scanned || '').toLowerCase().trim();
+  let item = pickList.find(i => i.code.toLowerCase() === scannedLower);
+  if(item) return item;
+  const scannedNorm = normalizeForMatch(scanned);
+  item = pickList.find(i => i.name && normalizeForMatch(i.name) === scannedNorm);
+  return item || null;
+}
+
 function handleItemScan(code){
   if(!activeBin){
     toast('Set an active bin first', 'red');
     return;
   }
-  const item = pickList.find(i => i.code.toLowerCase() === code.toLowerCase());
+  const item = findPickListItem(code);
   if(!item){
     pendingScanCode = code;
     document.getElementById('notFoundCode').textContent = code;
