@@ -214,6 +214,7 @@
   .scan-frame{
     position:relative;
   }
+
   .active-bin-chip{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
     background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
@@ -392,6 +393,10 @@
         <button class="btn sm" id="btnScanBinView" style="width:auto;">📷 Scan</button>
       </div>
       <div id="readerBin" style="display:none; margin-top:10px;" class="scan-frame"></div>
+    </div>
+    <div class="card" id="binSearchWrap" style="display:none;">
+      <label>🔍 Search this bin</label>
+      <input type="text" id="binSearchInput" placeholder="Search by item code or name...">
     </div>
     <div class="card" id="binContentsCard">
       <p class="hint">Select a bin above to view everything logged inside it.</p>
@@ -1445,34 +1450,63 @@ function selectBinForView(bin){
   renderBinContents(bin);
 }
 
+let binContentsState = { totals: [], entries: [] };
+
 function renderBinContents(bin){
   const card = document.getElementById('binContentsCard');
   const downloadRow = document.getElementById('binLogDownloadRow');
+  const searchWrap = document.getElementById('binSearchWrap');
   if(!bin){
     card.innerHTML = '<p class="hint">Select a bin above to view everything logged inside it.</p>';
     downloadRow.style.display = 'none';
+    searchWrap.style.display = 'none';
     return;
   }
   const entries = binLog[bin] || [];
   if(!entries.length){
     card.innerHTML = emptyHtml('📦','Bin is empty', 'No items logged into ' + escapeHtml(bin) + ' yet.');
     downloadRow.style.display = 'none';
+    searchWrap.style.display = 'none';
     return;
   }
-  const totals = {};
-  entries.forEach(e=>{ totals[e.code] = (totals[e.code]||0) + e.qty; });
-  const totalsHtml = Object.entries(totals).map(([code, qty])=>
-    `<div class="bin-entry"><span class="code">${escapeHtml(code)}</span><span>${qty} pcs</span></div>`
-  ).join('');
-  const logHtml = entries.slice().reverse().map(e=>
-    `<div class="bin-entry"><span>${escapeHtml(e.code)} <span style="color:var(--ink-dim)">×${e.qty}</span></span>` +
-    `<span class="t">${escapeHtml(e.picker || 'Unknown')} · ${new Date(e.ts).toLocaleString()}</span></div>`
-  ).join('');
+  const totalsMap = {};
+  entries.forEach(e=>{
+    if(!totalsMap[e.code]) totalsMap[e.code] = { code: e.code, name: e.name || '', qty: 0 };
+    totalsMap[e.code].qty += e.qty;
+    if(e.name && !totalsMap[e.code].name) totalsMap[e.code].name = e.name;
+  });
+  binContentsState = { totals: Object.values(totalsMap), entries: entries.slice().reverse() };
+  searchWrap.style.display = 'block';
+  document.getElementById('binSearchInput').value = '';
+  renderBinContentsFiltered('');
+  downloadRow.style.display = 'flex';
+}
+
+function renderBinContentsFiltered(term){
+  const card = document.getElementById('binContentsCard');
+  const q = normalizeForMatch(term);
+  const matches = (code, name) => !q || normalizeForMatch(code).includes(q) || normalizeForMatch(name || '').includes(q);
+  const totals = binContentsState.totals.filter(t => matches(t.code, t.name));
+  const entries = binContentsState.entries.filter(e => matches(e.code, e.name));
+  const totalsHtml = totals.length
+    ? totals.map(t =>
+        `<div class="bin-entry"><span class="code">${escapeHtml(t.code)}${t.name ? ' <span style="color:var(--ink-dim); font-weight:400;">— ' + escapeHtml(t.name) + '</span>' : ''}</span><span>${t.qty} pcs</span></div>`
+      ).join('')
+    : '<p class="hint">No matching items.</p>';
+  const logHtml = entries.length
+    ? entries.map(e =>
+        `<div class="bin-entry"><span>${escapeHtml(e.code)}${e.name ? ' <span style="color:var(--ink-dim);">— ' + escapeHtml(e.name) + '</span>' : ''} <span style="color:var(--ink-dim)">×${e.qty}</span></span>` +
+        `<span class="t">${escapeHtml(e.picker || 'Unknown')} · ${new Date(e.ts).toLocaleString()}</span></div>`
+      ).join('')
+    : '<p class="hint">No matching activity.</p>';
   card.innerHTML =
     `<label>Totals in this bin</label>${totalsHtml}` +
     `<label style="margin-top:14px;">Activity log</label>${logHtml}`;
-  downloadRow.style.display = 'flex';
 }
+
+document.getElementById('binSearchInput').addEventListener('input', (e)=>{
+  renderBinContentsFiltered(e.target.value);
+});
 
 /* ---------------- Picker summary: who picked what, across all bins ---------------- */
 function renderPickerSummary(){
