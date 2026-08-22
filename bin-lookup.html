@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bin Lookup · Production View</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#0b0c0e; --panel:#151719; --panel-2:#1b1e21; --line:#2a2d31;
+    --ink:#eef0f2; --ink-dim:#8b9096;
+    --amber:#f5a623; --amber-dim:#3a2a10;
+    --green:#3ecf8e; --green-dim:#123324;
+    --red:#ef5b5b; --red-dim:#3a1d1d;
+    --radius:12px;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Segoe UI', Roboto, -apple-system, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  input, select, textarea, button{ font-family:inherit; }
+  header{ padding:16px 16px 12px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:10; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .mark{
+    width:38px; height:38px; border-radius:9px; flex-shrink:0;
+    background: repeating-linear-gradient(45deg, var(--amber), var(--amber) 6px, #1a1300 6px, #1a1300 12px);
+    border:2px solid var(--amber);
+  }
+  h1{ font-size:19px; margin:0; font-weight:700; }
+  .sub{ font-size:11px; color:var(--ink-dim); font-family:'IBM Plex Mono', monospace; margin-top:1px; }
+  .sync-badge{
+    font-size:10.5px; font-family:'IBM Plex Mono', monospace; padding:4px 9px; border-radius:999px;
+    background: var(--green-dim); color: var(--green); white-space:nowrap; flex-shrink:0;
+  }
+  .sync-badge.offline{ background: var(--panel-2); color: var(--ink-dim); }
+  main{ padding:16px; max-width:640px; margin:0 auto; padding-bottom:60px; }
+  .card{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding:16px; margin-bottom:14px;
+  }
+  label{ display:block; font-size:11px; font-weight:600; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+  input[type=text]{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:11px 12px; font-size:14px; outline:none;
+  }
+  input[type=text]:focus{ border-color: var(--amber); }
+  select{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:11px 12px; font-size:14px; outline:none;
+  }
+  .row{ display:flex; gap:8px; }
+  .row > *{ flex:1; }
+  .btn{
+    font-size:14px; font-weight:600; border-radius:8px; padding:11px 14px; border:1px solid var(--line);
+    background: var(--panel-2); color: var(--ink); cursor:pointer; white-space:nowrap;
+  }
+  .btn.primary{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
+  .btn.sm{ width:auto; padding:9px 14px; font-size:13px; }
+  #reader{ width:100%; border-radius: var(--radius); overflow:hidden; border:1px solid var(--line); margin-top:10px; }
+  #reader video{ border-radius: var(--radius); }
+  .bin-header{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    background: var(--panel-2); border:1px solid var(--amber-dim); border-radius:8px;
+    padding:12px 14px; margin-bottom:14px;
+  }
+  .bin-header .l{ font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+  .bin-header .v{ font-family:'IBM Plex Mono', monospace; font-weight:700; color: var(--amber); font-size:17px; }
+  .bin-header .count{ font-size:12px; color: var(--ink-dim); font-family:'IBM Plex Mono', monospace; }
+  .mat-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .mat-row:last-child{ border-bottom:none; }
+  .mat-row .code{ font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:13.5px; }
+  .mat-row .name{ font-size:12px; color: var(--ink-dim); margin-top:2px; }
+  .mat-row .qty{ font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:16px; color: var(--green); flex-shrink:0; white-space:nowrap; }
+  .hint{ font-size:11.5px; color:var(--ink-dim); line-height:1.5; margin-top:8px; }
+  .empty{ text-align:center; padding:36px 16px; color: var(--ink-dim); }
+  .empty .glyph{ font-size:34px; margin-bottom:10px; }
+  .empty p{ margin:4px 0; font-size:13px; }
+  #toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+    background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    padding:11px 18px; border-radius:999px; font-size:13px; font-weight:600;
+    opacity:0; transition: all .25s ease; pointer-events:none; z-index:50; white-space:nowrap;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.red{ background: var(--red); color:#2a0808; }
+  #toast.green{ background: var(--green); color:#062018; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark"></div>
+    <div style="flex:1;">
+      <h1>Bin Lookup</h1>
+      <div class="sub">Production view · read-only</div>
+    </div>
+    <div id="syncBadge" class="sync-badge offline">● Local only</div>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <label>Session ID (must match the picking app)</label>
+    <div class="row">
+      <input type="text" id="sessionIdInput" placeholder="e.g. 2026-08-17-run1">
+      <button class="btn sm" id="btnJoinSession" style="width:auto;">Join</button>
+    </div>
+    <p class="hint" id="syncHint">Firebase isn't configured in this file, so it can only see bin data saved on this same device/browser as the picking app.</p>
+  </div>
+
+  <div class="card">
+    <label>Select or scan a bin</label>
+    <div class="row">
+      <select id="binSelect"></select>
+      <button class="btn sm" id="btnScanBin" style="width:auto;">📷 Scan</button>
+    </div>
+    <div id="reader" style="display:none;"></div>
+  </div>
+
+  <div class="card" id="searchWrap" style="display:none;">
+    <label>🔍 Search this bin</label>
+    <input type="text" id="searchInput" placeholder="Search by item code or name...">
+  </div>
+
+  <div class="card" id="resultCard">
+    <div class="empty">
+      <div class="glyph">📦</div>
+      <p style="font-weight:600; color:var(--ink);">Select or scan a bin</p>
+      <p>Its material list will show up here — code, name, and quantity, nothing else.</p>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+/* =================================================================
+   FIREBASE CONFIG — paste the SAME config used in picking-list.html
+   so this module reads live data from the same session.
+   Leave as-is to fall back to this device's local data only.
+   ================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCfUmCJqvmEcl_C7ChUURA-VxZa_yfJOdw",
+  authDomain: "pmsd-ims.firebaseapp.com",
+  projectId: "pmsd-ims",
+  storageBucket: "pmsd-ims.firebasestorage.app",
+  messagingSenderId: "68646491760",
+  appId: "1:68646491760:web:32d174a0cd66c8de5186b5"
+};
+const FIREBASE_ENABLED = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+};
+
+let sessionId = LS.get('wms_session_id', 'default');
+let bins = LS.get('wms_bins', []);
+let binLog = LS.get('wms_bin_log', {});
+let selectedBin = '';
+let binState = { totals: [] };
+
+function toast(msg, kind){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (kind ? ' ' + kind : '');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=> el.className = '', 1800);
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function normalizeForMatch(s){
+  return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+document.getElementById('sessionIdInput').value = sessionId;
+
+function setSyncBadge(kind, text){
+  const el = document.getElementById('syncBadge');
+  el.textContent = (kind === 'live' ? '● ' : '● ') + text;
+  el.className = 'sync-badge' + (kind === 'live' ? '' : ' offline');
+}
+
+/* ---------------- Firebase (read-only listener) ---------------- */
+let db = null, fbReady = false, unsubscribeDoc = null;
+
+function sessionDocRef(){
+  return db.collection('pmsd_picking_sessions').doc(sessionId);
+}
+
+function initFirebase(){
+  if(!FIREBASE_ENABLED){
+    setSyncBadge('offline', 'Local only');
+    document.getElementById('syncHint').textContent = "Firebase isn't configured in this file, so it can only see bin data saved on this same device/browser as the picking app.";
+    renderBinSelect();
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    fbReady = true;
+    document.getElementById('syncHint').textContent = 'Connected — this updates live as bins are scanned in the picking app, on any device using the same Session ID.';
+    attachListener();
+  }catch(err){
+    setSyncBadge('offline', 'Config error');
+    console.error('Error:', err);
+    renderBinSelect();
+  }
+}
+
+function attachListener(){
+  if(unsubscribeDoc) unsubscribeDoc();
+  unsubscribeDoc = sessionDocRef().onSnapshot(snap=>{
+    setSyncBadge('live', 'Live · ' + sessionId);
+    const data = snap.exists ? snap.data() : {};
+    bins = (data.bins && data.bins.length) ? data.bins : [];
+    binLog = data.binLog || {};
+    renderBinSelect();
+    if(selectedBin) renderBinContents(selectedBin);
+  }, err=>{
+    setSyncBadge('offline', 'Sync error');
+    console.error(err);
+  });
+}
+
+document.getElementById('btnJoinSession').addEventListener('click', ()=>{
+  const val = document.getElementById('sessionIdInput').value.trim();
+  if(!val) return;
+  sessionId = val;
+  LS.set('wms_session_id', sessionId);
+  if(FIREBASE_ENABLED && fbReady){
+    attachListener();
+    toast('Joined session: ' + sessionId, 'green');
+  } else {
+    toast('Firebase not configured — reading local data only', 'red');
+  }
+});
+
+/* ---------------- Bin select + render ---------------- */
+function renderBinSelect(){
+  const sel = document.getElementById('binSelect');
+  const allBins = Array.from(new Set([...(bins || []), ...Object.keys(binLog || {})]));
+  sel.innerHTML = '<option value="">— choose a bin —</option>' + allBins.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  sel.value = selectedBin && allBins.includes(selectedBin) ? selectedBin : '';
+}
+document.getElementById('binSelect').addEventListener('change', (e)=>{
+  selectedBin = e.target.value;
+  renderBinContents(selectedBin);
+});
+
+function renderBinContents(bin){
+  const card = document.getElementById('resultCard');
+  const searchWrap = document.getElementById('searchWrap');
+  if(!bin){
+    card.innerHTML = `<div class="empty"><div class="glyph">📦</div><p style="font-weight:600; color:var(--ink);">Select or scan a bin</p><p>Its material list will show up here — code, name, and quantity, nothing else.</p></div>`;
+    searchWrap.style.display = 'none';
+    return;
+  }
+  const entries = (binLog && binLog[bin]) || [];
+  if(!entries.length){
+    card.innerHTML = `<div class="bin-header"><div><div class="l">Bin</div><div class="v">${escapeHtml(bin)}</div></div></div><div class="empty"><div class="glyph">📭</div><p style="font-weight:600; color:var(--ink);">Bin is empty</p><p>Nothing has been logged into ${escapeHtml(bin)} yet.</p></div>`;
+    searchWrap.style.display = 'none';
+    return;
+  }
+  const totalsMap = {};
+  entries.forEach(e=>{
+    if(!totalsMap[e.code]) totalsMap[e.code] = { code: e.code, name: e.name || '', qty: 0 };
+    totalsMap[e.code].qty += e.qty;
+    if(e.name && !totalsMap[e.code].name) totalsMap[e.code].name = e.name;
+  });
+  binState = { bin, totals: Object.values(totalsMap) };
+  searchWrap.style.display = 'block';
+  document.getElementById('searchInput').value = '';
+  renderFiltered('');
+}
+
+function renderFiltered(term){
+  const card = document.getElementById('resultCard');
+  const q = normalizeForMatch(term);
+  const totals = binState.totals.filter(t => !q || normalizeForMatch(t.code).includes(q) || normalizeForMatch(t.name).includes(q));
+  const rowsHtml = totals.length
+    ? totals.map(t => `<div class="mat-row"><div><div class="code">${escapeHtml(t.code)}</div>${t.name ? `<div class="name">${escapeHtml(t.name)}</div>` : ''}</div><div class="qty">${t.qty} pcs</div></div>`).join('')
+    : '<p class="hint">No matching items.</p>';
+  card.innerHTML =
+    `<div class="bin-header"><div><div class="l">Bin</div><div class="v">${escapeHtml(binState.bin)}</div></div><div class="count">${binState.totals.length} item${binState.totals.length===1?'':'s'}</div></div>` +
+    rowsHtml;
+}
+document.getElementById('searchInput').addEventListener('input', (e)=> renderFiltered(e.target.value));
+
+/* ---------------- Camera scan ---------------- */
+let scannerBin = null;
+document.getElementById('btnScanBin').addEventListener('click', ()=>{
+  const readerEl = document.getElementById('reader');
+  if(scannerBin){
+    scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display = 'none';
+    return;
+  }
+  readerEl.style.display = 'block';
+  scannerBin = new Html5Qrcode('reader');
+  scannerBin.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText)=>{
+      scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display = 'none';
+      const bin = decodedText.trim();
+      selectedBin = bin;
+      renderBinSelect();
+      renderBinContents(bin);
+      if(navigator.vibrate){ try{ navigator.vibrate(50); }catch(e){} }
+      toast('Loaded ' + bin, 'green');
+    },
+    ()=>{}
+  ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display = 'none'; });
+});
+
+/* ---------------- Init ---------------- */
+renderBinSelect();
+initFirebase();
+</script>
+</body>
+</html>
