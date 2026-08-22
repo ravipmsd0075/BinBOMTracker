@@ -115,11 +115,12 @@
     padding: 14px; margin-bottom: 12px;
   }
   label{ font-size:11px; color: var(--ink-dim); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:5px; }
-  textarea, input[type=text], input[type=number], select{
+  textarea, input[type=text], input[type=number], input[type=password], select{
     width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
     border-radius:8px; padding:10px 11px; font-size:14px; font-family:'IBM Plex Mono', monospace;
     outline:none;
   }
+  #adminConfirmPinRow{ margin-top:14px; }
   textarea:focus, input:focus, select:focus{ border-color: var(--amber); }
   textarea{ min-height:120px; resize:vertical; }
   select{ font-family:'Inter',sans-serif; }
@@ -294,7 +295,7 @@
     <div class="mark"></div>
     <div style="flex:1;">
       <h1>Picking List</h1>
-      <div class="sub">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
+      <div class="sub" id="currentBomHeaderLabel">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
     </div>
     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
       <div id="syncBadge" class="sync-badge offline">● Local only</div>
@@ -411,6 +412,23 @@
 
   <!-- ===================== SETUP ===================== -->
   <section class="view" id="view-setup">
+    <h2 class="section-title">BOM / Job</h2>
+    <div class="card">
+      <label>Current BOM name</label>
+      <div class="row">
+        <input type="text" id="currentBomNameInput" placeholder="e.g. BOM-2088">
+        <button class="btn sm" id="btnRenameBom" style="width:auto;">Rename</button>
+      </div>
+      <div class="foot-actions" style="margin-top:10px;">
+        <button class="btn primary sm" id="btnNewBom" style="width:auto;">+ New BOM</button>
+      </div>
+      <p class="hint">Starting or switching to a different BOM automatically saves the one you're leaving — its pick list and bin log stay safe and separate, ready to switch back to anytime.</p>
+    </div>
+    <div class="card" id="savedBomsCard">
+      <label>Saved BOMs <span class="count" id="savedBomsCount">0</span></label>
+      <div id="savedBomsList"></div>
+    </div>
+
     <h2 class="section-title">Picker</h2>
     <div class="card">
       <label>Your name (tagged on every pick you confirm)</label>
@@ -420,6 +438,16 @@
       </div>
       <p class="hint">Shown in the activity log and picker summary so you can see who picked what and how much.</p>
       <label class="checkline"><input type="checkbox" id="scanFeedbackCheck" checked> Beep + vibrate on every scan</label>
+    </div>
+
+    <h2 class="section-title">Admin</h2>
+    <div class="card">
+      <label>Admin PIN (protects "Reset Everything")</label>
+      <div class="row">
+        <input type="password" id="adminPinInput" placeholder="Set a PIN" inputmode="numeric" autocomplete="off">
+        <button class="btn sm" id="btnSetAdminPin" style="width:auto;">Save</button>
+      </div>
+      <p class="hint" id="adminPinStatus">No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.</p>
     </div>
 
     <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
@@ -513,6 +541,22 @@
   </div>
 </div>
 
+<!-- Admin-only confirm sheet (Reset Everything) -->
+<div class="sheet-backdrop" id="sheetAdminConfirm">
+  <div class="sheet">
+    <h3 id="adminConfirmTitle">Admin confirmation required</h3>
+    <p class="hint" id="adminConfirmBody">This wipes the pick list, bin log, and bin master for everyone on this session. Enter the Admin PIN to allow it.</p>
+    <div id="adminConfirmPinRow">
+      <label>Admin PIN</label>
+      <input type="password" id="adminConfirmPinInput" placeholder="Enter PIN" inputmode="numeric" autocomplete="off">
+    </div>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnAdminConfirmCancel">Cancel</button>
+      <button class="btn danger" id="btnAdminConfirmAllow">Allow</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -552,6 +596,17 @@ let binLog = LS.get('wms_bin_log', {});
 let activeBin = LS.get('wms_active_bin', null);
 let sessionId = LS.get('wms_session_id', 'default');
 let pickerName = LS.get('wms_picker_name', '');
+let adminPin = LS.get('wms_admin_pin', '');
+
+// Multiple BOMs/jobs: each saved BOM keeps its own pickList + binLog + activeBin.
+// `pickList`/`binLog`/`activeBin` above are always the *currently open* BOM's working data.
+let savedBoms = LS.get('wms_boms', {});
+let currentBomName = LS.get('wms_current_bom', '');
+if(!currentBomName){
+  // First time seeing this feature — name whatever was already loaded so nothing is lost.
+  currentBomName = 'BOM 1';
+  LS.set('wms_current_bom', currentBomName);
+}
 
 // Migration: lists saved before item ids existed won't have them — backfill so
 // pick/undo always target the exact row scanned, even when codes repeat.
@@ -567,6 +622,85 @@ function ensureItemIds(list){
   const migrated = ensureItemIds(pickList);
   pickList = migrated.list;
   if(migrated.changed) saveAllLocal();
+}
+
+/* ---------------- BOM / job switcher ---------------- */
+function saveCurrentBomSnapshot(){
+  if(!currentBomName) return;
+  savedBoms[currentBomName] = {
+    pickList: pickList.map(i => ({ ...i })),
+    binLog: JSON.parse(JSON.stringify(binLog)),
+    activeBin: activeBin,
+    savedAt: new Date().toISOString()
+  };
+  LS.set('wms_boms', savedBoms);
+}
+
+function switchToBom(name){
+  if(name === currentBomName) return;
+  saveCurrentBomSnapshot();
+  const snap = savedBoms[name] || { pickList: [], binLog: {}, activeBin: null };
+  pickList = (snap.pickList || []).map(i => ({ ...i }));
+  binLog = snap.binLog || {};
+  activeBin = snap.activeBin || null;
+  currentBomName = name;
+  LS.set('wms_current_bom', currentBomName);
+  hideLastPickBar();
+  saveAllLocal();
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+  }
+  const label = document.getElementById('activeBinLabel');
+  if(label) label.textContent = activeBin || 'Not set';
+  renderCurrentView();
+  refreshStats();
+  renderSavedBoms();
+  toast('Switched to "' + name + '"', 'green');
+}
+
+function deleteBom(name){
+  if(name === currentBomName){ toast('Switch away from this BOM before deleting it', 'red'); return; }
+  if(!confirm('Delete saved BOM "' + name + '"? This cannot be undone.')) return;
+  delete savedBoms[name];
+  LS.set('wms_boms', savedBoms);
+  renderSavedBoms();
+  toast('Deleted "' + name + '"', 'green');
+}
+
+function renderSavedBoms(){
+  const nameInput = document.getElementById('currentBomNameInput');
+  if(nameInput) nameInput.value = currentBomName || '';
+  const headerLabel = document.getElementById('currentBomHeaderLabel');
+  if(headerLabel) headerLabel.textContent = currentBomName ? ('BOM: ' + currentBomName) : 'PMSD · Scan · Match · Bin Track';
+  const total = pickList.length;
+  const done = pickList.filter(i => i.qtyPicked >= i.qtyReq).length;
+  const otherNames = Object.keys(savedBoms)
+    .filter(n => n !== currentBomName)
+    .sort((a, b) => (savedBoms[b].savedAt || '').localeCompare(savedBoms[a].savedAt || ''));
+  const countEl = document.getElementById('savedBomsCount');
+  if(countEl) countEl.textContent = otherNames.length + (currentBomName ? 1 : 0);
+  const list = document.getElementById('savedBomsList');
+  if(!list) return;
+  let rows = '';
+  if(currentBomName){
+    rows += `<div class="bin-entry" style="align-items:center;">
+      <span><b>${escapeHtml(currentBomName)}</b> <span style="color:var(--ink-dim);">· ${done}/${total} picked</span> <span class="next-pill" style="margin-left:6px;">current</span></span>
+      <span></span>
+    </div>`;
+  }
+  rows += otherNames.map(name => {
+    const b = savedBoms[name];
+    const t = (b.pickList || []).length;
+    const d = (b.pickList || []).filter(i => i.qtyPicked >= i.qtyReq).length;
+    return `<div class="bin-entry" style="align-items:center;">
+      <span><b>${escapeHtml(name)}</b> <span style="color:var(--ink-dim);">· ${d}/${t} picked</span></span>
+      <span style="display:flex; gap:6px;">
+        <button class="btn sm ghost" data-switch-bom="${escapeHtml(name)}" style="width:auto;">Switch</button>
+        <button class="btn sm danger" data-delete-bom="${escapeHtml(name)}" style="width:auto;">🗑</button>
+      </span>
+    </div>`;
+  }).join('');
+  list.innerHTML = rows || '<p class="hint">No other BOMs yet — tap + New BOM to start one.</p>';
 }
 
 /* ---------------- Sync badge ---------------- */
@@ -995,8 +1129,71 @@ function renderSetup(){
   document.getElementById('binListInput').value = bins.join('\n');
   document.getElementById('pickerNameInput').value = pickerName;
   document.getElementById('scanFeedbackCheck').checked = scanFeedbackEnabled;
+  document.getElementById('adminPinStatus').textContent = adminPin
+    ? 'PIN is set — "Reset Everything" now asks for it before wiping data.'
+    : 'No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.';
   renderDuplicateCodeWarning();
+  renderSavedBoms();
 }
+
+document.getElementById('btnNewBom').addEventListener('click', ()=>{
+  const name = prompt('Name for the new BOM (e.g. BOM-2088):', '');
+  if(!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if(savedBoms[trimmed] || trimmed === currentBomName){
+    toast('A BOM named "' + trimmed + '" already exists — use Switch instead', 'red');
+    return;
+  }
+  saveCurrentBomSnapshot();
+  pickList = [];
+  binLog = {};
+  activeBin = null;
+  currentBomName = trimmed;
+  LS.set('wms_current_bom', currentBomName);
+  hideLastPickBar();
+  saveAllLocal();
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+  }
+  document.getElementById('activeBinLabel').textContent = 'Not set';
+  renderCurrentView();
+  refreshStats();
+  renderSavedBoms();
+  toast('Started new BOM "' + trimmed + '" — import its pick list below', 'green');
+});
+
+document.getElementById('btnRenameBom').addEventListener('click', ()=>{
+  const newName = document.getElementById('currentBomNameInput').value.trim();
+  if(!newName){ toast('Enter a name first', 'red'); return; }
+  if(newName === currentBomName) return;
+  if(savedBoms[newName]){ toast('That name is already used by another saved BOM', 'red'); return; }
+  if(currentBomName && savedBoms[currentBomName]){
+    savedBoms[newName] = savedBoms[currentBomName];
+    delete savedBoms[currentBomName];
+  }
+  currentBomName = newName;
+  LS.set('wms_current_bom', currentBomName);
+  saveCurrentBomSnapshot();
+  renderSavedBoms();
+  toast('Renamed to "' + newName + '"', 'green');
+});
+
+document.getElementById('savedBomsList').addEventListener('click', (e)=>{
+  const switchBtn = e.target.closest('[data-switch-bom]');
+  if(switchBtn){ switchToBom(switchBtn.dataset.switchBom); return; }
+  const delBtn = e.target.closest('[data-delete-bom]');
+  if(delBtn){ deleteBom(delBtn.dataset.deleteBom); return; }
+});
+
+document.getElementById('btnSetAdminPin').addEventListener('click', ()=>{
+  const val = document.getElementById('adminPinInput').value.trim();
+  if(!val || val.length < 4){ toast('Use a PIN of at least 4 digits', 'red'); return; }
+  adminPin = val;
+  LS.set('wms_admin_pin', adminPin);
+  document.getElementById('adminPinInput').value = '';
+  toast('Admin PIN saved', 'green');
+  renderSetup();
+});
 
 document.getElementById('scanFeedbackCheck').addEventListener('change', (e)=>{
   scanFeedbackEnabled = e.target.checked;
@@ -1159,14 +1356,43 @@ document.getElementById('btnExportCsv').addEventListener('click', ()=>{
 });
 
 document.getElementById('btnResetAll').addEventListener('click', ()=>{
-  if(!confirm('This wipes pick list, bin log and bin master. Continue?')) return;
+  if(!adminPin){
+    toast('Set an Admin PIN first to protect this action', 'red');
+    document.querySelector('nav.tabs button[data-tab="setup"]').click();
+    setTimeout(()=> document.getElementById('adminPinInput').focus(), 150);
+    return;
+  }
+  document.getElementById('adminConfirmTitle').textContent = 'Admin confirmation required';
+  document.getElementById('adminConfirmBody').textContent =
+    'This wipes the pick list, bin log, and bin master for everyone on this session. Enter the Admin PIN to allow it.';
+  document.getElementById('adminConfirmPinInput').value = '';
+  document.getElementById('sheetAdminConfirm').classList.add('open');
+  setTimeout(()=> document.getElementById('adminConfirmPinInput').focus(), 150);
+});
+
+document.getElementById('btnAdminConfirmCancel').addEventListener('click', ()=>{
+  document.getElementById('sheetAdminConfirm').classList.remove('open');
+});
+
+document.getElementById('btnAdminConfirmAllow').addEventListener('click', ()=>{
+  const entered = document.getElementById('adminConfirmPinInput').value.trim();
+  if(entered !== adminPin){
+    toast('Incorrect PIN — reset not allowed', 'red');
+    document.getElementById('adminConfirmPinInput').value = '';
+    return;
+  }
+  document.getElementById('sheetAdminConfirm').classList.remove('open');
   activeBin = null;
   LS.set('wms_active_bin', null);
+  savedBoms = {};
+  LS.set('wms_boms', savedBoms);
+  currentBomName = 'BOM 1';
+  LS.set('wms_current_bom', currentBomName);
   persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
   hideLastPickBar();
   renderPickList(); renderScanPending(); renderSetup(); refreshStats();
   document.getElementById('activeBinLabel').textContent = 'Not set';
-  toast('All data reset');
+  toast('All data reset — allowed by admin', 'green');
 });
 
 /* ---------------- Active bin ---------------- */
@@ -1539,6 +1765,7 @@ renderPickList();
 renderPending();
 renderScanPending();
 refreshStats();
+renderSavedBoms();
 initFirebase();
 </script>
 </body>
