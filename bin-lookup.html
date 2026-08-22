@@ -224,6 +224,15 @@ function attachListener(){
     const data = snap.exists ? snap.data() : {};
     bins = (data.bins && data.bins.length) ? data.bins : [];
     binLog = data.binLog || {};
+    const hasAnyBinData = bins.length > 0 || Object.keys(binLog).length > 0;
+    const hint = document.getElementById('syncHint');
+    if(!snap.exists){
+      hint.innerHTML = `⚠ No session found for "<b>${escapeHtml(sessionId)}</b>". Open the picking app and check its Session ID (top-right badge, or Setup &gt; Sync) — type that exact ID here, then Join.`;
+    } else if(!hasAnyBinData){
+      hint.innerHTML = `⚠ Connected to session "<b>${escapeHtml(sessionId)}</b>", but no bins have been scanned into yet for it. If the picking app shows a different Session ID, use that exact one here instead.`;
+    } else {
+      hint.textContent = 'Connected — this updates live as bins are scanned in the picking app, on any device using the same Session ID.';
+    }
     renderBinSelect();
     if(selectedBin) renderBinContents(selectedBin);
   }, err=>{
