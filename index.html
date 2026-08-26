@@ -422,7 +422,7 @@
       <div class="foot-actions" style="margin-top:10px;">
         <button class="btn primary sm" id="btnNewBom" style="width:auto;">+ New BOM</button>
       </div>
-      <p class="hint">Starting or switching to a different BOM automatically saves the one you're leaving — its pick list and bin log stay safe and separate, ready to switch back to anytime.</p>
+      <p class="hint">Starting or switching to a different BOM automatically saves the one you're leaving — its pick list, bin log, and Session ID stay separate. Each BOM gets its own Session ID automatically, so switching or working on multiple BOMs never mixes live sync data between them.</p>
     </div>
     <div class="card" id="savedBomsCard">
       <label>Saved BOMs <span class="count" id="savedBomsCount">0</span></label>
@@ -461,6 +461,13 @@
     </div>
 
     <h2 class="section-title">Import Pick List</h2>
+    <div class="last-pick-bar" id="lastImportBar" style="display:none; border-color: var(--red);">
+      <div class="info">
+        <div class="l">Import replaced previous list</div>
+        <div class="v" id="lastImportText"></div>
+      </div>
+      <button class="btn sm ghost" id="btnUndoImport">↩ Undo Import</button>
+    </div>
     <div class="card" id="dupeCodeWarning" style="display:none; border-color: var(--red);">
       <label style="color:var(--red);">⚠ Duplicate item codes found</label>
       <div id="dupeCodeList" style="margin-top:6px;"></div>
@@ -557,6 +564,19 @@
   </div>
 </div>
 
+<!-- Import confirmation — protects the current BOM's pick list + bin log from accidental overwrite -->
+<div class="sheet-backdrop" id="sheetImportConfirm">
+  <div class="sheet">
+    <h3>Importing a new pick list</h3>
+    <p class="hint" id="importConfirmBody">This file will replace the current pick list.</p>
+    <div class="foot-actions" style="flex-direction:column; gap:8px; align-items:stretch;">
+      <button class="btn primary" id="btnImportAsNewBom" style="width:100%;">Save current BOM &amp; import as new BOM</button>
+      <button class="btn danger" id="btnImportReplace" style="width:100%;">Replace current BOM anyway</button>
+      <button class="btn ghost" id="btnImportCancel" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -625,12 +645,28 @@ function ensureItemIds(list){
 }
 
 /* ---------------- BOM / job switcher ---------------- */
+function genSessionId(bomName){
+  const slug = (bomName || 'bom').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '') || 'bom';
+  return slug + '-' + Date.now().toString(36).slice(-5);
+}
+
+function switchSyncSession(newSessionId){
+  sessionId = newSessionId;
+  LS.set('wms_session_id', sessionId);
+  const input = document.getElementById('sessionIdInput');
+  if(input) input.value = sessionId;
+  if(FIREBASE_ENABLED && fbReady){
+    attachFirestoreListener();
+  }
+}
+
 function saveCurrentBomSnapshot(){
   if(!currentBomName) return;
   savedBoms[currentBomName] = {
     pickList: pickList.map(i => ({ ...i })),
     binLog: JSON.parse(JSON.stringify(binLog)),
     activeBin: activeBin,
+    sessionId: sessionId,
     savedAt: new Date().toISOString()
   };
   LS.set('wms_boms', savedBoms);
@@ -646,6 +682,11 @@ function switchToBom(name){
   currentBomName = name;
   LS.set('wms_current_bom', currentBomName);
   hideLastPickBar();
+  hideImportRevertBar();
+  // Each BOM keeps its own Session ID so switching never mixes live sync data
+  // between BOMs on other devices — generate one if this BOM predates the feature.
+  const bomSessionId = snap.sessionId || genSessionId(name);
+  switchSyncSession(bomSessionId);
   saveAllLocal();
   if(FIREBASE_ENABLED && fbReady){
     sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
@@ -655,7 +696,7 @@ function switchToBom(name){
   renderCurrentView();
   refreshStats();
   renderSavedBoms();
-  toast('Switched to "' + name + '"', 'green');
+  toast('Switched to "' + name + '" · session ' + bomSessionId, 'green');
 }
 
 function deleteBom(name){
@@ -684,7 +725,7 @@ function renderSavedBoms(){
   let rows = '';
   if(currentBomName){
     rows += `<div class="bin-entry" style="align-items:center;">
-      <span><b>${escapeHtml(currentBomName)}</b> <span style="color:var(--ink-dim);">· ${done}/${total} picked</span> <span class="next-pill" style="margin-left:6px;">current</span></span>
+      <span><b>${escapeHtml(currentBomName)}</b> <span style="color:var(--ink-dim);">· ${done}/${total} picked · session ${escapeHtml(sessionId)}</span> <span class="next-pill" style="margin-left:6px;">current</span></span>
       <span></span>
     </div>`;
   }
@@ -692,8 +733,9 @@ function renderSavedBoms(){
     const b = savedBoms[name];
     const t = (b.pickList || []).length;
     const d = (b.pickList || []).filter(i => i.qtyPicked >= i.qtyReq).length;
+    const bomSession = b.sessionId || '(none saved)';
     return `<div class="bin-entry" style="align-items:center;">
-      <span><b>${escapeHtml(name)}</b> <span style="color:var(--ink-dim);">· ${d}/${t} picked</span></span>
+      <span><b>${escapeHtml(name)}</b> <span style="color:var(--ink-dim);">· ${d}/${t} picked · session ${escapeHtml(bomSession)}</span></span>
       <span style="display:flex; gap:6px;">
         <button class="btn sm ghost" data-switch-bom="${escapeHtml(name)}" style="width:auto;">Switch</button>
         <button class="btn sm danger" data-delete-bom="${escapeHtml(name)}" style="width:auto;">🗑</button>
@@ -1151,6 +1193,8 @@ document.getElementById('btnNewBom').addEventListener('click', ()=>{
   currentBomName = trimmed;
   LS.set('wms_current_bom', currentBomName);
   hideLastPickBar();
+  hideImportRevertBar();
+  switchSyncSession(genSessionId(trimmed)); // fresh Session ID so this BOM never mixes sync data with another
   saveAllLocal();
   if(FIREBASE_ENABLED && fbReady){
     sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
@@ -1159,7 +1203,7 @@ document.getElementById('btnNewBom').addEventListener('click', ()=>{
   renderCurrentView();
   refreshStats();
   renderSavedBoms();
-  toast('Started new BOM "' + trimmed + '" — import its pick list below', 'green');
+  toast('Started new BOM "' + trimmed + '" · session ' + sessionId + ' — import its pick list below', 'green');
 });
 
 document.getElementById('btnRenameBom').addEventListener('click', ()=>{
@@ -1248,6 +1292,111 @@ function mergeIntoPickList(parsed){
   return merged;
 }
 
+/* ---------------- Import confirmation + revert (protects the current BOM from silent overwrite) ---------------- */
+let pendingImport = null; // { parsed, source, fileLabel }
+let lastImportBackup = null;
+
+function openImportConfirm(parsed, meta){
+  pendingImport = { parsed, ...meta };
+  const total = pickList.length;
+  const done = pickList.filter(i => i.qtyPicked >= i.qtyReq).length;
+  const body = document.getElementById('importConfirmBody');
+  if(total > 0){
+    body.textContent = 'Your current BOM "' + currentBomName + '" has ' + total + ' item' + (total===1?'':'s') +
+      ' (' + done + ' picked). Importing ' + parsed.length + ' new row' + (parsed.length===1?'':'s') +
+      ' will replace it unless you start a new BOM.';
+  } else {
+    body.textContent = 'Importing ' + parsed.length + ' row' + (parsed.length===1?'':'s') + ' into "' + currentBomName + '".';
+  }
+  document.getElementById('sheetImportConfirm').classList.add('open');
+}
+
+function closeImportConfirm(){
+  document.getElementById('sheetImportConfirm').classList.remove('open');
+  pendingImport = null;
+}
+
+document.getElementById('btnImportCancel').addEventListener('click', closeImportConfirm);
+
+document.getElementById('btnImportAsNewBom').addEventListener('click', ()=>{
+  if(!pendingImport) return;
+  const name = prompt('Name for the new BOM (e.g. BOM-2088):', '');
+  if(!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if(savedBoms[trimmed] || trimmed === currentBomName){
+    toast('A BOM named "' + trimmed + '" already exists — use Switch instead', 'red');
+    return;
+  }
+  saveCurrentBomSnapshot(); // old BOM kept fully intact, nothing deleted
+  pickList = pendingImport.parsed;
+  binLog = {};
+  activeBin = null;
+  currentBomName = trimmed;
+  LS.set('wms_current_bom', currentBomName);
+  hideLastPickBar();
+  hideImportRevertBar();
+  switchSyncSession(genSessionId(trimmed)); // fresh Session ID so this BOM never mixes sync data with another
+  saveAllLocal();
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+  }
+  document.getElementById('activeBinLabel').textContent = 'Not set';
+  finishImportUI(pendingImport, 'Imported ' + pendingImport.parsed.length + ' items into new BOM "' + trimmed + '" · session ' + sessionId);
+  closeImportConfirm();
+});
+
+document.getElementById('btnImportReplace').addEventListener('click', ()=>{
+  if(!pendingImport) return;
+  // snapshot exactly what's about to be overwritten, so it can be restored with one tap
+  lastImportBackup = {
+    pickList: pickList.map(i => ({ ...i })),
+    binLog: JSON.parse(JSON.stringify(binLog)),
+    activeBin,
+    bomName: currentBomName
+  };
+  persistBulk({ pickList: pendingImport.parsed, binLog: {} });
+  hideLastPickBar();
+  document.getElementById('activeBinLabel').textContent = activeBin || 'Not set';
+  showImportRevertBar(currentBomName);
+  finishImportUI(pendingImport, pendingImport.parsed.length + ' items imported — previous list can still be restored');
+  closeImportConfirm();
+});
+
+function finishImportUI(meta, message){
+  if(meta.source === 'paste'){
+    document.getElementById('pickListInput').value = '';
+  } else if(meta.source === 'excel'){
+    document.getElementById('excelFileName').textContent = '✓ ' + meta.fileLabel;
+  }
+  renderPickList(); renderScanPending(); renderDuplicateCodeWarning(); renderSavedBoms(); refreshStats();
+  toast(message, 'green');
+}
+
+function showImportRevertBar(bomName){
+  document.getElementById('lastImportText').textContent = 'Replaced pick list for "' + bomName + '"';
+  document.getElementById('lastImportBar').style.display = 'flex';
+}
+function hideImportRevertBar(){
+  document.getElementById('lastImportBar').style.display = 'none';
+  lastImportBackup = null;
+}
+document.getElementById('btnUndoImport').addEventListener('click', ()=>{
+  if(!lastImportBackup) return;
+  pickList = lastImportBackup.pickList;
+  binLog = lastImportBackup.binLog;
+  activeBin = lastImportBackup.activeBin;
+  currentBomName = lastImportBackup.bomName;
+  LS.set('wms_current_bom', currentBomName);
+  saveAllLocal();
+  if(FIREBASE_ENABLED && fbReady){
+    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+  }
+  document.getElementById('activeBinLabel').textContent = activeBin || 'Not set';
+  renderCurrentView(); refreshStats(); renderSavedBoms();
+  hideImportRevertBar();
+  toast('Import undone — previous list restored', 'green');
+});
+
 document.getElementById('btnImportList').addEventListener('click', ()=>{
   const raw = document.getElementById('pickListInput').value.trim();
   if(!raw){ toast('Paste a list first', 'red'); return; }
@@ -1264,13 +1413,11 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
   if(merging){
     persistBulk({ pickList: mergeIntoPickList(parsed) }); // binLog untouched, progress kept
     toast(parsed.length + ' rows added to the existing list', 'green');
+    document.getElementById('pickListInput').value = '';
+    renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
   } else {
-    persistBulk({ pickList: parsed, binLog: {} });
-    hideLastPickBar();
-    toast(parsed.length + ' items loaded', 'green');
+    openImportConfirm(parsed, { source: 'paste' });
   }
-  document.getElementById('pickListInput').value = '';
-  renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
 });
 
 document.getElementById('btnPickExcel').addEventListener('click', ()=>{
@@ -1311,13 +1458,10 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
         persistBulk({ pickList: mergeIntoPickList(parsed) }); // binLog untouched, progress kept
         document.getElementById('excelFileName').textContent = '✓ Added ' + parsed.length + ' rows from ' + file.name;
         toast(parsed.length + ' rows added to the existing list', 'green');
+        renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
       } else {
-        persistBulk({ pickList: parsed, binLog: {} });
-        hideLastPickBar();
-        document.getElementById('excelFileName').textContent = '✓ Loaded ' + parsed.length + ' items from ' + file.name;
-        toast(parsed.length + ' items imported', 'green');
+        openImportConfirm(parsed, { source: 'excel', fileLabel: 'Loaded ' + parsed.length + ' items from ' + file.name });
       }
-      renderPickList(); renderScanPending(); renderDuplicateCodeWarning();
     }catch(err){
       toast('Could not read that file', 'red');
       document.getElementById('excelFileName').textContent = '';
@@ -1331,6 +1475,7 @@ document.getElementById('btnClearList').addEventListener('click', ()=>{
   if(!confirm('Clear the entire pick list and bin log?')) return;
   persistBulk({ pickList: [], binLog: {} });
   hideLastPickBar();
+  hideImportRevertBar();
   renderPickList(); renderScanPending(); refreshStats(); renderDuplicateCodeWarning();
   toast('Pick list cleared');
 });
@@ -1390,6 +1535,7 @@ document.getElementById('btnAdminConfirmAllow').addEventListener('click', ()=>{
   LS.set('wms_current_bom', currentBomName);
   persistBulk({ pickList: [], binLog: {}, bins: DEFAULT_BINS.slice() });
   hideLastPickBar();
+  hideImportRevertBar();
   renderPickList(); renderScanPending(); renderSetup(); refreshStats();
   document.getElementById('activeBinLabel').textContent = 'Not set';
   toast('All data reset — allowed by admin', 'green');
