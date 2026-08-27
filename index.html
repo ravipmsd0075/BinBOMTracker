@@ -308,6 +308,9 @@
   <button class="tabstat active" data-tab="scan">
     <span class="tn">📷</span><span class="tl">Scan &amp; Pick</span>
   </button>
+  <button class="tabstat" data-tab="bom">
+    <span class="tn" id="tabCountBom">📋</span><span class="tl">BOM</span>
+  </button>
   <button class="tabstat" data-tab="list">
     <span class="tn" id="tabCountList">0/0</span><span class="tl">Pick List</span>
   </button>
@@ -410,8 +413,8 @@
     <div class="card" id="pickerSummaryCard"></div>
   </section>
 
-  <!-- ===================== SETUP ===================== -->
-  <section class="view" id="view-setup">
+  <!-- ===================== BOM / JOB ===================== -->
+  <section class="view" id="view-bom">
     <h2 class="section-title">BOM / Job</h2>
     <div class="card">
       <label>Current BOM name</label>
@@ -428,7 +431,11 @@
       <label>Saved BOMs <span class="count" id="savedBomsCount">0</span></label>
       <div id="savedBomsList"></div>
     </div>
+    <p class="hint" style="margin-top:10px;">Switching here changes what you pick against on the <b>Scan &amp; Pick</b> tab immediately — the picker always works the currently selected BOM's list.</p>
+  </section>
 
+  <!-- ===================== SETUP ===================== -->
+  <section class="view" id="view-setup">
     <h2 class="section-title">Picker</h2>
     <div class="card">
       <label>Your name (tagged on every pick you confirm)</label>
@@ -577,6 +584,22 @@
   </div>
 </div>
 
+<!-- New BOM — name it, and optionally pin an exact Session ID so there's no ambiguity about which data shows up -->
+<div class="sheet-backdrop" id="sheetNewBom">
+  <div class="sheet">
+    <h3>New BOM</h3>
+    <p class="hint">Give it a name. Leave Session ID blank to auto-generate one, or type an existing Session ID to load whatever data already lives there — the BOM name shown will always match the session's actual data, so there's no confusion later.</p>
+    <label>BOM name</label>
+    <input type="text" id="newBomNameInput" placeholder="e.g. BOM-2088">
+    <label style="margin-top:12px;">Session ID (optional)</label>
+    <input type="text" id="newBomSessionInput" placeholder="Auto-generated if left blank">
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnNewBomCancel">Cancel</button>
+      <button class="btn primary" id="btnNewBomCreate">Create BOM</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -659,6 +682,35 @@ function switchSyncSession(newSessionId){
     attachFirestoreListener();
   }
 }
+
+/* ---------------- New BOM sheet — name + optional explicit Session ID, shared by "+ New BOM" and the import-confirm flow ---------------- */
+let newBomCallback = null;
+
+function openNewBomSheet(callback){
+  newBomCallback = callback;
+  document.getElementById('newBomNameInput').value = '';
+  document.getElementById('newBomSessionInput').value = '';
+  document.getElementById('sheetNewBom').classList.add('open');
+  setTimeout(()=> document.getElementById('newBomNameInput').focus(), 100);
+}
+function closeNewBomSheet(){
+  document.getElementById('sheetNewBom').classList.remove('open');
+  newBomCallback = null;
+}
+document.getElementById('btnNewBomCancel').addEventListener('click', closeNewBomSheet);
+document.getElementById('btnNewBomCreate').addEventListener('click', ()=>{
+  const name = document.getElementById('newBomNameInput').value.trim();
+  if(!name){ toast('Enter a BOM name', 'red'); return; }
+  if(savedBoms[name] || name === currentBomName){
+    toast('A BOM named "' + name + '" already exists — use Switch instead', 'red');
+    return;
+  }
+  const sessionInput = document.getElementById('newBomSessionInput').value.trim();
+  const chosenSessionId = sessionInput || genSessionId(name);
+  const cb = newBomCallback;
+  closeNewBomSheet();
+  if(cb) cb(name, chosenSessionId);
+});
 
 function saveCurrentBomSnapshot(){
   if(!currentBomName) return;
@@ -803,6 +855,7 @@ function attachFirestoreListener(){
     }
     renderCurrentView();
     refreshStats();
+    renderSavedBoms();
   }, err=>{
     setSyncBadge('offline', 'Sync error');
     console.error(err);
@@ -812,18 +865,38 @@ function attachFirestoreListener(){
 document.getElementById('btnSetSession').addEventListener('click', ()=>{
   const val = document.getElementById('sessionIdInput').value.trim();
   if(!val){ toast('Enter a session ID', 'red'); return; }
+  if(val === sessionId){ toast('Already on session "' + val + '"', 'red'); return; }
+  if(!FIREBASE_ENABLED || !fbReady){
+    toast('Local mode — session ID has no effect until Firebase is configured', 'red');
+    return;
+  }
+  // protect whatever's currently loaded before switching context — nothing gets lost
+  saveCurrentBomSnapshot();
+  hideLastPickBar();
+  hideImportRevertBar();
+  // if this Session ID already belongs to a BOM we know about locally, show its real name
+  // instead of leaving the old BOM name on screen next to different data (the confusion this fixes)
+  const matchName = Object.keys(savedBoms).find(n => savedBoms[n].sessionId === val);
+  currentBomName = matchName || ('Session: ' + val);
+  LS.set('wms_current_bom', currentBomName);
+  activeBin = null;
+  LS.set('wms_active_bin', null);
   sessionId = val;
   LS.set('wms_session_id', sessionId);
-  if(FIREBASE_ENABLED && fbReady){
-    attachFirestoreListener();
-    toast('Joined session: ' + sessionId, 'green');
-  } else {
-    toast('Local mode — session ID has no effect until Firebase is configured', 'red');
-  }
+  attachFirestoreListener();
+  document.getElementById('activeBinLabel').textContent = 'Not set';
+  renderSavedBoms();
+  toast(
+    matchName
+      ? 'Joined session "' + val + '" — BOM "' + matchName + '"'
+      : 'Joined session "' + val + '" — name this BOM on the BOM tab once its data loads',
+    'green'
+  );
 });
 
 function renderCurrentView(){
   const activeTab = document.querySelector('nav.tabs button.active').dataset.tab;
+  if(activeTab === 'bom') renderSavedBoms();
   if(activeTab === 'list') renderPickList();
   if(activeTab === 'pending') renderPending();
   if(activeTab === 'bin') renderBinSelect();
@@ -954,6 +1027,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('active');
     if(btn.dataset.tab === 'scan') renderScanPending();
+    if(btn.dataset.tab === 'bom') renderSavedBoms();
     if(btn.dataset.tab === 'list') renderPickList();
     if(btn.dataset.tab === 'pending') renderPending();
     if(btn.dataset.tab === 'bin') renderBinSelect();
@@ -1175,35 +1249,29 @@ function renderSetup(){
     ? 'PIN is set — "Reset Everything" now asks for it before wiping data.'
     : 'No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.';
   renderDuplicateCodeWarning();
-  renderSavedBoms();
 }
 
 document.getElementById('btnNewBom').addEventListener('click', ()=>{
-  const name = prompt('Name for the new BOM (e.g. BOM-2088):', '');
-  if(!name || !name.trim()) return;
-  const trimmed = name.trim();
-  if(savedBoms[trimmed] || trimmed === currentBomName){
-    toast('A BOM named "' + trimmed + '" already exists — use Switch instead', 'red');
-    return;
-  }
-  saveCurrentBomSnapshot();
-  pickList = [];
-  binLog = {};
-  activeBin = null;
-  currentBomName = trimmed;
-  LS.set('wms_current_bom', currentBomName);
-  hideLastPickBar();
-  hideImportRevertBar();
-  switchSyncSession(genSessionId(trimmed)); // fresh Session ID so this BOM never mixes sync data with another
-  saveAllLocal();
-  if(FIREBASE_ENABLED && fbReady){
-    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
-  }
-  document.getElementById('activeBinLabel').textContent = 'Not set';
-  renderCurrentView();
-  refreshStats();
-  renderSavedBoms();
-  toast('Started new BOM "' + trimmed + '" · session ' + sessionId + ' — import its pick list below', 'green');
+  openNewBomSheet((name, chosenSessionId)=>{
+    saveCurrentBomSnapshot(); // old BOM kept fully intact, nothing deleted
+    pickList = [];
+    binLog = {};
+    activeBin = null;
+    currentBomName = name;
+    LS.set('wms_current_bom', currentBomName);
+    hideLastPickBar();
+    hideImportRevertBar();
+    switchSyncSession(chosenSessionId); // either freshly generated, or an existing session the user chose to load
+    saveAllLocal();
+    if(FIREBASE_ENABLED && fbReady){
+      sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+    }
+    document.getElementById('activeBinLabel').textContent = 'Not set';
+    renderCurrentView();
+    refreshStats();
+    renderSavedBoms();
+    toast('Started new BOM "' + name + '" · session ' + sessionId + ' — import its pick list below', 'green');
+  });
 });
 
 document.getElementById('btnRenameBom').addEventListener('click', ()=>{
@@ -1320,30 +1388,28 @@ document.getElementById('btnImportCancel').addEventListener('click', closeImport
 
 document.getElementById('btnImportAsNewBom').addEventListener('click', ()=>{
   if(!pendingImport) return;
-  const name = prompt('Name for the new BOM (e.g. BOM-2088):', '');
-  if(!name || !name.trim()) return;
-  const trimmed = name.trim();
-  if(savedBoms[trimmed] || trimmed === currentBomName){
-    toast('A BOM named "' + trimmed + '" already exists — use Switch instead', 'red');
-    return;
-  }
-  saveCurrentBomSnapshot(); // old BOM kept fully intact, nothing deleted
-  pickList = pendingImport.parsed;
-  binLog = {};
-  activeBin = null;
-  currentBomName = trimmed;
-  LS.set('wms_current_bom', currentBomName);
-  hideLastPickBar();
-  hideImportRevertBar();
-  switchSyncSession(genSessionId(trimmed)); // fresh Session ID so this BOM never mixes sync data with another
-  saveAllLocal();
-  if(FIREBASE_ENABLED && fbReady){
-    sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
-  }
-  document.getElementById('activeBinLabel').textContent = 'Not set';
-  finishImportUI(pendingImport, 'Imported ' + pendingImport.parsed.length + ' items into new BOM "' + trimmed + '" · session ' + sessionId);
-  closeImportConfirm();
+  const importMeta = pendingImport; // capture before the sheet-close below would null it
+  document.getElementById('sheetImportConfirm').classList.remove('open');
+  openNewBomSheet((name, chosenSessionId)=>{
+    saveCurrentBomSnapshot(); // old BOM kept fully intact, nothing deleted
+    pickList = importMeta.parsed;
+    binLog = {};
+    activeBin = null;
+    currentBomName = name;
+    LS.set('wms_current_bom', currentBomName);
+    hideLastPickBar();
+    hideImportRevertBar();
+    switchSyncSession(chosenSessionId); // either freshly generated, or an existing session the user chose to load
+    saveAllLocal();
+    if(FIREBASE_ENABLED && fbReady){
+      sessionDocRef().set({ pickList, binLog, bins }, { merge: true }).catch(()=>{});
+    }
+    document.getElementById('activeBinLabel').textContent = 'Not set';
+    finishImportUI(importMeta, 'Imported ' + importMeta.parsed.length + ' items into new BOM "' + name + '" · session ' + sessionId);
+    pendingImport = null;
+  });
 });
+
 
 document.getElementById('btnImportReplace').addEventListener('click', ()=>{
   if(!pendingImport) return;
