@@ -136,6 +136,7 @@
   .btn.primary{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
   .btn.ghost{ background:transparent; }
   .btn.danger{ color: var(--red); border-color: var(--red-dim); }
+  .btn.torch-on{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
   .btn.sm{ padding:8px 12px; font-size:12.5px; width:auto; }
   .row{ display:flex; gap:8px; }
   .row > *{ flex:1; }
@@ -338,6 +339,7 @@
       <button class="btn sm ghost" id="btnChangeBin" style="width:auto;">Set Bin</button>
     </div>
     <div id="readerActiveBin" style="display:none; margin-top:10px;" class="scan-frame"></div>
+    <button class="btn sm ghost" id="btnTorchActiveBin" style="display:none; width:auto; margin-top:8px;" title="Toggle flashlight">🔦 Torch</button>
 
     <div class="last-pick-bar" id="lastPickBar" style="display:none;">
       <div class="info">
@@ -359,6 +361,7 @@
       <div class="row" style="margin-top:8px;">
         <button class="btn primary" id="btnStartItemScan">📷 Scan Item</button>
         <button class="btn ghost" id="btnStopScan" style="display:none;">Stop</button>
+        <button class="btn ghost" id="btnTorchItem" style="display:none; width:auto;" title="Toggle flashlight">🔦 Torch</button>
       </div>
       <div class="divider-label">or enter manually</div>
       <input type="text" id="manualItemInput" placeholder="Type / scanner-gun input then Enter">
@@ -397,6 +400,7 @@
         <button class="btn sm" id="btnScanBinView" style="width:auto;">📷 Scan</button>
       </div>
       <div id="readerBin" style="display:none; margin-top:10px;" class="scan-frame"></div>
+      <button class="btn sm ghost" id="btnTorchBin" style="display:none; width:auto; margin-top:8px;" title="Toggle flashlight">🔦 Torch</button>
     </div>
     <div class="card" id="binSearchWrap" style="display:none;">
       <label>🔍 Search this bin</label>
@@ -445,6 +449,7 @@
       </div>
       <p class="hint">Shown in the activity log and picker summary so you can see who picked what and how much.</p>
       <label class="checkline"><input type="checkbox" id="scanFeedbackCheck" checked> Beep + vibrate on every scan</label>
+      <label class="checkline"><input type="checkbox" id="voiceEnabledCheck" checked> Voice announcements ("Picked 5 into Bin B-001", "Item not found", "BOM Complete")</label>
     </div>
 
     <h2 class="section-title">Admin</h2>
@@ -1037,6 +1042,21 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
 });
 
 /* ---------------- Stats ---------------- */
+/* ---------------- Voice announcements (text-to-speech) ---------------- */
+let voiceEnabled = LS.get('wms_voice_enabled', true);
+let bomCompleteAnnounced = false; // reset whenever the list structurally changes (import/switch/clear/undo makes it incomplete again)
+
+function speak(text){
+  if(!voiceEnabled) return;
+  if(!('speechSynthesis' in window)) return;
+  try{
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 1;
+    window.speechSynthesis.speak(utter);
+  }catch(e){ /* speech synthesis unavailable — silently skip */ }
+}
+
 function refreshStats(){
   const total = pickList.length;
   const done = pickList.filter(i=>i.qtyPicked >= i.qtyReq).length;
@@ -1048,6 +1068,17 @@ function refreshStats(){
   if(elList) elList.textContent = done + '/' + total;
   if(elPending) elPending.textContent = pending;
   if(elBin) elBin.textContent = binsUsed;
+
+  // Announce once per BOM when every item reaches its required qty
+  if(total > 0 && done === total){
+    if(!bomCompleteAnnounced){
+      bomCompleteAnnounced = true;
+      speak('BOM Complete!');
+      toast('🎉 BOM Complete — every item picked', 'green');
+    }
+  } else {
+    bomCompleteAnnounced = false; // list became incomplete again (undo, merge-import added rows, etc.)
+  }
 }
 
 /* ---------------- Pick list rendering ---------------- */
@@ -1245,6 +1276,7 @@ function renderSetup(){
   document.getElementById('binListInput').value = bins.join('\n');
   document.getElementById('pickerNameInput').value = pickerName;
   document.getElementById('scanFeedbackCheck').checked = scanFeedbackEnabled;
+  document.getElementById('voiceEnabledCheck').checked = voiceEnabled;
   document.getElementById('adminPinStatus').textContent = adminPin
     ? 'PIN is set — "Reset Everything" now asks for it before wiping data.'
     : 'No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.';
@@ -1311,6 +1343,12 @@ document.getElementById('scanFeedbackCheck').addEventListener('change', (e)=>{
   scanFeedbackEnabled = e.target.checked;
   LS.set('wms_scan_feedback', scanFeedbackEnabled);
   if(scanFeedbackEnabled) scanFeedback('ok'); // quick sample so they know it's on
+});
+
+document.getElementById('voiceEnabledCheck').addEventListener('change', (e)=>{
+  voiceEnabled = e.target.checked;
+  LS.set('wms_voice_enabled', voiceEnabled);
+  if(voiceEnabled) speak('Voice announcements on'); // quick sample so they know it's on
 });
 
 function renderPickerBadge(){
@@ -1624,6 +1662,7 @@ document.getElementById('btnChangeBin').addEventListener('click', ()=>{
 
 document.getElementById('btnScanActiveBin').addEventListener('click', ()=>{
   const readerEl = document.getElementById('readerActiveBin');
+  const torchBtn = document.getElementById('btnTorchActiveBin');
   readerEl.style.display = 'block';
   scannerActiveBin = new Html5Qrcode('readerActiveBin');
   scannerActiveBin.start(
@@ -1631,14 +1670,18 @@ document.getElementById('btnScanActiveBin').addEventListener('click', ()=>{
     { fps: 10, qrbox: { width: 220, height: 220 } },
     (decodedText)=>{
       scannerActiveBin.stop().catch(()=>{}); scannerActiveBin = null; readerEl.style.display='none';
+      resetTorchButton(torchBtn);
       const bin = decodedText.trim();
       scanFeedback('ok');
       setActiveBin(bin);
       toast('Active bin: ' + bin, 'green');
     },
     ()=>{}
-  ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
+  ).then(()=>{
+    torchBtn.style.display = '';
+  }).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
 });
+document.getElementById('btnTorchActiveBin').addEventListener('click', ()=> toggleTorch(scannerActiveBin, document.getElementById('btnTorchActiveBin')));
 
 /* ---------------- Scan feedback: beep + vibrate ---------------- */
 let scanFeedbackEnabled = LS.get('wms_scan_feedback', true);
@@ -1687,10 +1730,31 @@ function resumeItemScanner(){
   }
 }
 
+function resetTorchButton(btnEl){
+  if(!btnEl) return;
+  btnEl.style.display = 'none';
+  btnEl.dataset.on = '0';
+  btnEl.classList.remove('torch-on');
+  btnEl.textContent = btnEl.dataset.label || '🔦 Torch';
+}
+
+async function toggleTorch(scannerInstance, btnEl){
+  if(!scannerInstance) return;
+  const isOn = btnEl.dataset.on === '1';
+  try{
+    await scannerInstance.applyVideoConstraints({ advanced: [{ torch: !isOn }] });
+    btnEl.dataset.on = isOn ? '0' : '1';
+    btnEl.classList.toggle('torch-on', !isOn);
+    btnEl.textContent = !isOn ? '🔦 Torch On' : (btnEl.dataset.label || '🔦 Torch');
+  }catch(err){
+    toast('Torch not supported on this camera', 'red');
+  }
+}
+
 function stopAllScanners(){
-  if(scannerItem){ scannerItem.stop().catch(()=>{}); scannerItem = null; document.getElementById('reader').style.display='none'; document.getElementById('btnStartItemScan').style.display=''; document.getElementById('btnStopScan').style.display='none'; }
-  if(scannerBin){ scannerBin.stop().catch(()=>{}); scannerBin = null; document.getElementById('readerBin').style.display='none'; }
-  if(scannerActiveBin){ scannerActiveBin.stop().catch(()=>{}); scannerActiveBin = null; document.getElementById('readerActiveBin').style.display='none'; }
+  if(scannerItem){ scannerItem.stop().catch(()=>{}); scannerItem = null; document.getElementById('reader').style.display='none'; document.getElementById('btnStartItemScan').style.display=''; document.getElementById('btnStopScan').style.display='none'; resetTorchButton(document.getElementById('btnTorchItem')); }
+  if(scannerBin){ scannerBin.stop().catch(()=>{}); scannerBin = null; document.getElementById('readerBin').style.display='none'; resetTorchButton(document.getElementById('btnTorchBin')); }
+  if(scannerActiveBin){ scannerActiveBin.stop().catch(()=>{}); scannerActiveBin = null; document.getElementById('readerActiveBin').style.display='none'; resetTorchButton(document.getElementById('btnTorchActiveBin')); }
   itemScanBusy = false;
 }
 
@@ -1710,7 +1774,9 @@ document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
       handleItemScan(decodedText.trim());
     },
     ()=>{}
-  ).catch(err=>{
+  ).then(()=>{
+    document.getElementById('btnTorchItem').style.display = '';
+  }).catch(err=>{
     toast('Camera error — check permission', 'red');
     document.getElementById('btnStartItemScan').style.display='';
     document.getElementById('btnStopScan').style.display='none';
@@ -1719,6 +1785,7 @@ document.getElementById('btnStartItemScan').addEventListener('click', ()=>{
 });
 
 document.getElementById('btnStopScan').addEventListener('click', stopAllScanners);
+document.getElementById('btnTorchItem').addEventListener('click', ()=> toggleTorch(scannerItem, document.getElementById('btnTorchItem')));
 
 document.getElementById('manualItemInput').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){
@@ -1727,8 +1794,46 @@ document.getElementById('manualItemInput').addEventListener('keydown', (e)=>{
   }
 });
 
+/* ---------------- Global barcode-wedge listener ----------------
+   Handheld scanners act like a keyboard: they "type" a code very fast
+   (a few ms between characters — far faster than a human) and finish
+   with Enter. This lets a picker scan anytime on the Scan & Pick tab
+   without first tapping the manual-input box to focus it. */
+let wedgeBuffer = '';
+let wedgeLastTime = 0;
+const WEDGE_GAP_THRESHOLD_MS = 50;
+
+document.addEventListener('keydown', (e)=>{
+  const activeTabBtn = document.querySelector('nav.tabs button.active');
+  if(!activeTabBtn || activeTabBtn.dataset.tab !== 'scan') return; // only relevant on the picking screen
+  if(document.querySelector('.sheet-backdrop.open')) return; // don't fire underneath an open confirm/not-found/etc. sheet
+
+  const target = e.target;
+  const isEditable = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+  if(isEditable) return; // typing in the manual box (or any field) is handled by its own listener — never hijack it
+
+  const now = performance.now();
+  if(e.key === 'Enter'){
+    if(wedgeBuffer.length >= 3){
+      const code = wedgeBuffer;
+      wedgeBuffer = '';
+      handleItemScan(code);
+    } else {
+      wedgeBuffer = '';
+    }
+    return;
+  }
+  if(e.key.length === 1){ // a single printable character
+    const gap = wedgeLastTime ? (now - wedgeLastTime) : 0;
+    wedgeLastTime = now;
+    // A slow gap means this isn't a scanner burst — drop whatever was buffered and start fresh from this key.
+    wedgeBuffer = (wedgeBuffer && gap <= WEDGE_GAP_THRESHOLD_MS) ? wedgeBuffer + e.key : e.key;
+  }
+});
+
 document.getElementById('btnScanBinView').addEventListener('click', ()=>{
   const readerEl = document.getElementById('readerBin');
+  const torchBtn = document.getElementById('btnTorchBin');
   readerEl.style.display = 'block';
   scannerBin = new Html5Qrcode('readerBin');
   scannerBin.start(
@@ -1736,12 +1841,16 @@ document.getElementById('btnScanBinView').addEventListener('click', ()=>{
     { fps: 10, qrbox: { width: 220, height: 220 } },
     (decodedText)=>{
       scannerBin.stop().catch(()=>{}); scannerBin = null; readerEl.style.display='none';
+      resetTorchButton(torchBtn);
       scanFeedback('ok');
       selectBinForView(decodedText.trim());
     },
     ()=>{}
-  ).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
+  ).then(()=>{
+    torchBtn.style.display = '';
+  }).catch(()=>{ toast('Camera error — check permission', 'red'); readerEl.style.display='none'; });
 });
+document.getElementById('btnTorchBin').addEventListener('click', ()=> toggleTorch(scannerBin, document.getElementById('btnTorchBin')));
 
 /* ---------------- Item scan → match logic ---------------- */
 let pendingScanCode = null;
@@ -1771,6 +1880,7 @@ function handleItemScan(code){
   const item = findPickListItem(code);
   if(!item){
     scanFeedback('warn');
+    speak('Warning: item not found');
     pendingScanCode = code;
     document.getElementById('notFoundCode').textContent = code;
     document.getElementById('sheetNotFound').classList.add('open');
@@ -1848,6 +1958,7 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   showLastPickBar({ id: idSnapshot, code: codeSnapshot, name: nameSnapshot, qty, bin: binSnapshot, ts: tsSnapshot });
   document.getElementById('sheetBackdrop').classList.remove('open');
   toast('Picked ' + qty + ' × ' + codeSnapshot + ' — ' + pickerName, 'green');
+  speak('Picked ' + qty + ' ' + (nameSnapshot || codeSnapshot) + ' into bin ' + binSnapshot);
   confirmItem = null;
   resumeItemScanner();
 });
