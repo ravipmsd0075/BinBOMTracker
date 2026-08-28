@@ -239,6 +239,34 @@
   @keyframes up{ from{ transform:translateY(30px); opacity:0 } to{ transform:none; opacity:1 } }
   .sheet h3{ font-family:'Space Grotesk',sans-serif; margin:0 0 3px; font-size:16px; }
   .sheet .meta{ font-size:12px; color:var(--ink-dim); margin-bottom:14px; font-family:'IBM Plex Mono', monospace; }
+  .qty-presets{ display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+  .qty-presets button{
+    flex:1; min-width:56px; background: var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    border-radius:8px; padding:8px 6px; font-size:12.5px; font-weight:600; cursor:pointer;
+    font-family:'Space Grotesk', sans-serif;
+  }
+  .qty-presets button:active{ background: var(--amber); color:#1a1300; border-color:var(--amber); }
+  .qty-presets button.max-btn{ background: var(--amber-dim); color: var(--amber); border-color: var(--amber-dim); }
+
+  .progress-wrap{ margin-top:8px; }
+  .progress-track{
+    width:100%; height:7px; background: var(--panel-2); border-radius:99px; overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .progress-fill{
+    height:100%; background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+    border-radius:99px; transition: width .25s ease; width:0%;
+  }
+  .progress-label{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-dim);
+    margin-top:5px; display:flex; justify-content:space-between;
+  }
+  header .progress-wrap{ margin-top:9px; }
+
+  .list-tools{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .list-tools input[type=text]{ flex:2; min-width:120px; }
+  .list-tools select{ flex:1; min-width:100px; }
+
   .qty-stepper{ display:flex; align-items:center; gap:10px; }
   .qty-stepper button{
     width:42px; height:42px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2);
@@ -302,6 +330,10 @@
       <div id="syncBadge" class="sync-badge offline">● Local only</div>
       <div id="pickerBadge" class="sync-badge offline" style="cursor:pointer;">👤 Set picker</div>
     </div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-track"><div class="progress-fill" id="headerProgressFill"></div></div>
+    <div class="progress-label"><span id="headerProgressText">0 / 0 picked</span><span id="headerProgressPct">0%</span></div>
   </div>
 </header>
 
@@ -372,6 +404,25 @@
   <!-- ===================== PICK LIST ===================== -->
   <section class="view" id="view-list">
     <h2 class="section-title">Master Pick List <span class="count" id="listCount">0 items</span></h2>
+    <div class="progress-wrap" style="margin-bottom:12px;">
+      <div class="progress-track"><div class="progress-fill" id="listProgressFill"></div></div>
+      <div class="progress-label"><span id="listProgressText">0 / 0 picked</span><span id="listProgressPct">0%</span></div>
+    </div>
+    <div class="list-tools">
+      <input type="text" id="listSearchInput" placeholder="🔍 Search code or name...">
+      <select id="listFilterSelect">
+        <option value="all">All</option>
+        <option value="pending">Pending</option>
+        <option value="partial">Partial</option>
+        <option value="done">Completed</option>
+      </select>
+      <select id="listSortSelect">
+        <option value="default">Sort: List order</option>
+        <option value="name">Sort: Name A-Z</option>
+        <option value="code">Sort: Code A-Z</option>
+        <option value="remaining">Sort: Remaining qty</option>
+      </select>
+    </div>
     <div class="foot-actions" style="margin-bottom:12px;">
       <button class="btn ghost sm" id="btnDownloadList" style="width:100%;">⬇ Download Pick List (.xlsx)</button>
     </div>
@@ -381,6 +432,15 @@
   <!-- ===================== PENDING ===================== -->
   <section class="view" id="view-pending">
     <h2 class="section-title">Pending Items <span class="count" id="pendingCount">0 remaining</span></h2>
+    <div class="list-tools">
+      <input type="text" id="pendingSearchInput" placeholder="🔍 Search code or name...">
+      <select id="pendingSortSelect">
+        <option value="default">Sort: List order</option>
+        <option value="name">Sort: Name A-Z</option>
+        <option value="code">Sort: Code A-Z</option>
+        <option value="remaining">Sort: Remaining qty</option>
+      </select>
+    </div>
     <div class="foot-actions" style="margin-bottom:12px;">
       <button class="btn ghost sm" id="btnDownloadPending" style="width:100%;">⬇ Download Pending List (.xlsx)</button>
     </div>
@@ -539,6 +599,12 @@
       <button id="qtyMinus">−</button>
       <input type="number" id="qtyInput" value="1">
       <button id="qtyPlus">+</button>
+    </div>
+    <div class="qty-presets" id="qtyPresetsRow">
+      <button type="button" data-preset="5">+5</button>
+      <button type="button" data-preset="10">+10</button>
+      <button type="button" data-preset="25">+25</button>
+      <button type="button" class="max-btn" data-preset="max">Max</button>
     </div>
     <div class="foot-actions">
       <button class="btn ghost" id="btnCancelPick">Cancel</button>
@@ -1069,6 +1135,21 @@ function refreshStats(){
   if(elPending) elPending.textContent = pending;
   if(elBin) elBin.textContent = binsUsed;
 
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const headerFill = document.getElementById('headerProgressFill');
+  const headerText = document.getElementById('headerProgressText');
+  const headerPct = document.getElementById('headerProgressPct');
+  if(headerFill){ headerFill.style.width = pct + '%'; }
+  if(headerText){ headerText.textContent = done + ' / ' + total + ' picked'; }
+  if(headerPct){ headerPct.textContent = pct + '%'; }
+
+  const listFill = document.getElementById('listProgressFill');
+  const listText = document.getElementById('listProgressText');
+  const listPct = document.getElementById('listProgressPct');
+  if(listFill){ listFill.style.width = pct + '%'; }
+  if(listText){ listText.textContent = done + ' / ' + total + ' picked'; }
+  if(listPct){ listPct.textContent = pct + '%'; }
+
   // Announce once per BOM when every item reaches its required qty
   if(total > 0 && done === total){
     if(!bomCompleteAnnounced){
@@ -1099,14 +1180,52 @@ function pickRowHtml(item){
   </div>`;
 }
 
+function itemStatus(item){
+  if(item.qtyPicked >= item.qtyReq) return 'done';
+  if(item.qtyPicked > 0) return 'partial';
+  return 'pending';
+}
+
+function applySearchSort(items, query, sortBy){
+  let out = items;
+  if(query){
+    const q = query.toLowerCase();
+    out = out.filter(i => (i.code||'').toLowerCase().includes(q) || (i.name||'').toLowerCase().includes(q));
+  }
+  if(sortBy === 'name'){
+    out = out.slice().sort((a,b) => (a.name||a.code).localeCompare(b.name||b.code));
+  } else if(sortBy === 'code'){
+    out = out.slice().sort((a,b) => (a.code||'').localeCompare(b.code||''));
+  } else if(sortBy === 'remaining'){
+    out = out.slice().sort((a,b) => (b.qtyReq - b.qtyPicked) - (a.qtyReq - a.qtyPicked));
+  }
+  return out;
+}
+
 function renderPickList(){
   const c = document.getElementById('pickListContainer');
   document.getElementById('listCount').textContent = pickList.length + ' items';
   if(!pickList.length){
     c.innerHTML = emptyHtml('📋','No pick list loaded','Go to Setup tab and paste your list.');
+    refreshStats();
     return;
   }
-  c.innerHTML = pickList.map(pickRowHtml).join('');
+  const query = (document.getElementById('listSearchInput')?.value || '').trim();
+  const filterStatus = document.getElementById('listFilterSelect')?.value || 'all';
+  const sortBy = document.getElementById('listSortSelect')?.value || 'default';
+
+  let filtered = filterStatus === 'all' ? pickList : pickList.filter(i => itemStatus(i) === filterStatus);
+  filtered = applySearchSort(filtered, query, sortBy);
+
+  document.getElementById('listCount').textContent =
+    (filtered.length === pickList.length) ? (pickList.length + ' items') : (filtered.length + ' of ' + pickList.length + ' items');
+
+  if(!filtered.length){
+    c.innerHTML = emptyHtml('🔍','No matches', 'Try a different search term or filter.');
+    refreshStats();
+    return;
+  }
+  c.innerHTML = filtered.map(pickRowHtml).join('');
   refreshStats();
 }
 
@@ -1118,7 +1237,18 @@ function renderPending(){
     c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item on the list has been fully picked.' : 'Load a pick list first.');
     return;
   }
-  c.innerHTML = pending.map(pickRowHtml).join('');
+  const query = (document.getElementById('pendingSearchInput')?.value || '').trim();
+  const sortBy = document.getElementById('pendingSortSelect')?.value || 'default';
+  const filtered = applySearchSort(pending, query, sortBy);
+
+  document.getElementById('pendingCount').textContent =
+    (filtered.length === pending.length) ? (pending.length + ' remaining') : (filtered.length + ' of ' + pending.length + ' remaining');
+
+  if(!filtered.length){
+    c.innerHTML = emptyHtml('🔍','No matches', 'Try a different search term.');
+    return;
+  }
+  c.innerHTML = filtered.map(pickRowHtml).join('');
 }
 
 /* ---------------- Downloads: full list / pending list as .xlsx ---------------- */
@@ -1129,6 +1259,12 @@ function downloadRowsAsXlsx(rows, headers, filename, sheetName){
   XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
   XLSX.writeFile(wb, filename);
 }
+
+document.getElementById('listSearchInput').addEventListener('input', renderPickList);
+document.getElementById('listFilterSelect').addEventListener('change', renderPickList);
+document.getElementById('listSortSelect').addEventListener('change', renderPickList);
+document.getElementById('pendingSearchInput').addEventListener('input', renderPending);
+document.getElementById('pendingSortSelect').addEventListener('change', renderPending);
 
 document.getElementById('btnDownloadList').addEventListener('click', ()=>{
   if(!pickList.length){ toast('Nothing to download — load a pick list first', 'red'); return; }
@@ -1916,6 +2052,15 @@ document.getElementById('qtyPlus').addEventListener('click', ()=>{
   const inp = document.getElementById('qtyInput');
   const max = confirmItem ? (confirmItem.qtyReq - confirmItem.qtyPicked) : 999999;
   inp.value = Math.min(max, (parseInt(inp.value)||1) + 1);
+});
+
+document.getElementById('qtyPresetsRow').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-preset]');
+  if(!btn || !confirmItem) return;
+  const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
+  const preset = btn.dataset.preset;
+  const inp = document.getElementById('qtyInput');
+  inp.value = preset === 'max' ? remaining : Math.min(remaining, parseInt(preset, 10));
 });
 
 document.getElementById('btnCancelPick').addEventListener('click', ()=>{
