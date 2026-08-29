@@ -258,6 +258,7 @@
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   #toast.green{ background: var(--green); color:#06210f; }
   #toast.red{ background: var(--red); color:#2a0808; }
+  #toast.amber{ background: var(--amber); color:#1a1300; }
 
   /* ---- bin log ---- */
   .bin-entry{
@@ -547,6 +548,12 @@
         <button class="btn sm" id="btnSetAdminPin" style="width:auto;">Save</button>
       </div>
       <p class="hint" id="adminPinStatus">No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.</p>
+      <p class="hint">The PIN itself is never stored — only a salted SHA-256 hash of it — so it can't be read back out of this device's storage.</p>
+    </div>
+
+    <div class="card">
+      <label class="checkline" style="margin-top:0;"><input type="checkbox" id="overpickCheck"> Allow over-picking (scan more than the required qty)</label>
+      <p class="hint" id="overpickStatus">Off — scanning an item that's already fully picked is blocked, and quantities are capped at what's still required. Turn on for bulk counting where the physical count may exceed the BOM's stated qty.</p>
     </div>
 
     <h2 class="section-title">Sync <span class="count" id="syncStatusText">Local only</span></h2>
@@ -621,6 +628,7 @@
   <div class="sheet">
     <h3 id="sheetItemName">Item name</h3>
     <div class="meta" id="sheetItemMeta">CODE &middot; Required 0 &middot; Picked 0</div>
+    <p class="hint" id="overpickWarning" style="display:none; color:var(--red); font-weight:600;"></p>
     <label>Quantity to pick now</label>
     <div class="qty-stepper">
       <button id="qtyMinus">−</button>
@@ -739,7 +747,43 @@ let binLog = LS.get('wms_bin_log', {});
 let activeBin = LS.get('wms_active_bin', null);
 let sessionId = LS.get('wms_session_id', 'default');
 let pickerName = LS.get('wms_picker_name', '');
-let adminPin = LS.get('wms_admin_pin', '');
+let overpickEnabled = LS.get('wms_overpick_enabled', false);
+
+/* ---------------- Admin PIN (never stored in plain text — salted SHA-256 hash only) ---------------- */
+let adminPinHash = LS.get('wms_admin_pin_hash', null); // { salt, hash } | null
+
+async function sha256Hex(str){
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function randomHex(numBytes){
+  const arr = new Uint8Array(numBytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function hashPin(pin, salt){
+  try{
+    return await sha256Hex(salt + ':' + pin);
+  }catch(e){
+    console.error('SHA-256 hashing unavailable (requires HTTPS)', e);
+    return null;
+  }
+}
+// One-time migration: earlier versions of this app stored the PIN as plain text.
+// If that key is still around, hash it now and delete the plain-text copy.
+(async function migratePlainAdminPin(){
+  const legacy = LS.get('wms_admin_pin', '');
+  if(legacy && !adminPinHash){
+    const salt = randomHex(16);
+    const hash = await hashPin(legacy, salt);
+    if(hash){
+      adminPinHash = { salt, hash };
+      LS.set('wms_admin_pin_hash', adminPinHash);
+    }
+  }
+  if(legacy) localStorage.removeItem('wms_admin_pin');
+})();
 
 // Multiple BOMs/jobs: each saved BOM keeps its own pickList + binLog + activeBin.
 // `pickList`/`binLog`/`activeBin` above are always the *currently open* BOM's working data.
@@ -1041,7 +1085,7 @@ function persistPick(id, code, qty, bin, itemNameForLog, ts){
       const idx = list.findIndex(i => i.id === id);
       if(idx === -1) return; // item vanished — ignore
       const remaining = list[idx].qtyReq - list[idx].qtyPicked;
-      const applyQty = Math.max(0, Math.min(qty, remaining));
+      const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
       list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
       const log = data.binLog || {};
       if(!log[bin]) log[bin] = [];
@@ -1052,7 +1096,7 @@ function persistPick(id, code, qty, bin, itemNameForLog, ts){
     const item = pickList.find(i => i.id === id);
     if(item){
       const remaining = item.qtyReq - item.qtyPicked;
-      const applyQty = Math.max(0, Math.min(qty, remaining));
+      const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
       item.qtyPicked += applyQty;
     }
     if(!binLog[bin]) binLog[bin] = [];
@@ -1483,11 +1527,22 @@ function renderSetup(){
   document.getElementById('scanFeedbackCheck').checked = scanFeedbackEnabled;
   document.getElementById('voiceEnabledCheck').checked = voiceEnabled;
   document.getElementById('quickScanCheck').checked = quickScanEnabled;
-  document.getElementById('adminPinStatus').textContent = adminPin
-    ? 'PIN is set — "Reset Everything" now asks for it before wiping data.'
+  document.getElementById('overpickCheck').checked = overpickEnabled;
+  document.getElementById('overpickStatus').textContent = overpickEnabled
+    ? 'On — items can be scanned past their required qty. A warning shows in the confirm sheet whenever a pick would exceed the BOM quantity.'
+    : 'Off — scanning an item that\'s already fully picked is blocked, and quantities are capped at what\'s still required. Turn on for bulk counting where the physical count may exceed the BOM\'s stated qty.';
+  document.getElementById('adminPinStatus').textContent = adminPinHash
+    ? 'PIN is set (stored as a salted SHA-256 hash) — "Reset Everything" now asks for it before wiping data.'
     : 'No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.';
   renderDuplicateCodeWarning();
 }
+
+document.getElementById('overpickCheck').addEventListener('change', (e)=>{
+  overpickEnabled = e.target.checked;
+  LS.set('wms_overpick_enabled', overpickEnabled);
+  renderSetup();
+  toast(overpickEnabled ? 'Over-picking allowed' : 'Over-picking blocked', overpickEnabled ? 'amber' : 'green');
+});
 
 document.getElementById('quickScanCheck').addEventListener('change', (e)=>{
   quickScanEnabled = e.target.checked;
@@ -1567,13 +1622,16 @@ document.getElementById('savedBomsList').addEventListener('click', (e)=>{
   if(delBtn){ deleteBom(delBtn.dataset.deleteBom); return; }
 });
 
-document.getElementById('btnSetAdminPin').addEventListener('click', ()=>{
+document.getElementById('btnSetAdminPin').addEventListener('click', async ()=>{
   const val = document.getElementById('adminPinInput').value.trim();
   if(!val || val.length < 4){ toast('Use a PIN of at least 4 digits', 'red'); return; }
-  adminPin = val;
-  LS.set('wms_admin_pin', adminPin);
+  const salt = randomHex(16);
+  const hash = await hashPin(val, salt);
+  if(!hash){ toast('Could not hash PIN — this page needs HTTPS for secure storage', 'red'); return; }
+  adminPinHash = { salt, hash };
+  LS.set('wms_admin_pin_hash', adminPinHash);
   document.getElementById('adminPinInput').value = '';
-  toast('Admin PIN saved', 'green');
+  toast('Admin PIN saved (stored as a salted hash)', 'green');
   renderSetup();
 });
 
@@ -1846,7 +1904,7 @@ document.getElementById('btnExportCsv').addEventListener('click', ()=>{
 });
 
 document.getElementById('btnResetAll').addEventListener('click', ()=>{
-  if(!adminPin){
+  if(!adminPinHash){
     toast('Set an Admin PIN first to protect this action', 'red');
     document.querySelector('nav.tabs button[data-tab="setup"]').click();
     setTimeout(()=> document.getElementById('adminPinInput').focus(), 150);
@@ -1864,9 +1922,11 @@ document.getElementById('btnAdminConfirmCancel').addEventListener('click', ()=>{
   document.getElementById('sheetAdminConfirm').classList.remove('open');
 });
 
-document.getElementById('btnAdminConfirmAllow').addEventListener('click', ()=>{
+document.getElementById('btnAdminConfirmAllow').addEventListener('click', async ()=>{
   const entered = document.getElementById('adminConfirmPinInput').value.trim();
-  if(entered !== adminPin){
+  if(!adminPinHash){ toast('No admin PIN configured', 'red'); return; }
+  const enteredHash = await hashPin(entered, adminPinHash.salt);
+  if(!enteredHash || enteredHash !== adminPinHash.hash){
     toast('Incorrect PIN — reset not allowed', 'red');
     document.getElementById('adminConfirmPinInput').value = '';
     return;
@@ -2128,13 +2188,13 @@ function handleItemScan(code){
     document.getElementById('sheetNotFound').classList.add('open');
     return;
   }
-  if(item.qtyPicked >= item.qtyReq){
+  if(item.qtyPicked >= item.qtyReq && !overpickEnabled){
     toast(item.code + ' already fully picked', 'red');
     scanFeedback('warn');
     resumeItemScanner();
     return;
   }
-  scanFeedback('ok');
+  scanFeedback(item.qtyPicked >= item.qtyReq ? 'warn' : 'ok'); // 'warn' flags that this scan is already an over-pick
   if(quickScanEnabled){
     if(!pickerName){
       toast('Set your picker name in Setup first', 'red');
@@ -2142,8 +2202,7 @@ function handleItemScan(code){
       resumeItemScanner();
       return;
     }
-    const remaining = item.qtyReq - item.qtyPicked;
-    commitPick(item, Math.min(1, remaining));
+    commitPick(item, 1);
     resumeItemScanner();
     return;
   }
@@ -2157,8 +2216,20 @@ function openConfirmSheet(item){
   document.getElementById('sheetItemMeta').textContent =
     item.code + ' · Required ' + item.qtyReq + ' · Picked ' + item.qtyPicked + (item.location ? ' · 📍 ' + item.location : '');
   const remaining = item.qtyReq - item.qtyPicked;
-  document.getElementById('qtyInput').value = remaining;
-  document.getElementById('qtyInput').max = remaining;
+  const qtyInput = document.getElementById('qtyInput');
+  qtyInput.value = remaining > 0 ? remaining : 1;
+  if(overpickEnabled){
+    qtyInput.removeAttribute('max');
+  } else {
+    qtyInput.max = Math.max(remaining, 1);
+  }
+  const warning = document.getElementById('overpickWarning');
+  if(remaining <= 0){
+    warning.textContent = '⚠ Already at or beyond the required qty (' + item.qtyReq + ' required, ' + item.qtyPicked + ' picked). Confirming will over-pick this item.';
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
   updateQtyPresets(remaining);
   document.getElementById('sheetBackdrop').classList.add('open');
 }
@@ -2169,26 +2240,30 @@ document.getElementById('qtyMinus').addEventListener('click', ()=>{
 });
 document.getElementById('qtyPlus').addEventListener('click', ()=>{
   const inp = document.getElementById('qtyInput');
-  const max = confirmItem ? (confirmItem.qtyReq - confirmItem.qtyPicked) : 999999;
+  const remaining = confirmItem ? (confirmItem.qtyReq - confirmItem.qtyPicked) : 999999;
+  const max = overpickEnabled ? 999999 : Math.max(remaining, 1);
   inp.value = Math.min(max, (parseInt(inp.value)||1) + 1);
 });
 
 function updateQtyPresets(remaining){
   const wrap = document.getElementById('qtyPresets');
   if(!wrap) return;
-  wrap.style.display = remaining > 1 ? 'flex' : 'none';
+  wrap.style.display = (overpickEnabled || remaining > 1) ? 'flex' : 'none';
+  const maxBtn = wrap.querySelector('[data-preset="max"]');
+  if(maxBtn) maxBtn.style.display = remaining > 0 ? '' : 'none'; // "Max" is meaningless once already at/over target
 }
 document.getElementById('qtyPresets').addEventListener('click', (e)=>{
   const btn = e.target.closest('[data-preset]');
   if(!btn || !confirmItem) return;
   const inp = document.getElementById('qtyInput');
   const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
+  const ceiling = overpickEnabled ? 999999 : Math.max(remaining, 0);
   if(btn.dataset.preset === 'max'){
-    inp.value = remaining;
+    inp.value = Math.max(remaining, 1);
   } else {
     const add = parseInt(btn.dataset.preset, 10) || 0;
     const current = parseInt(inp.value) || 0;
-    inp.value = Math.min(remaining, current + add);
+    inp.value = Math.min(ceiling, current + add);
   }
 });
 
@@ -2235,7 +2310,7 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   }
   let qty = parseInt(document.getElementById('qtyInput').value) || 0;
   const remaining = confirmItem.qtyReq - confirmItem.qtyPicked;
-  qty = Math.max(1, Math.min(qty, remaining));
+  qty = overpickEnabled ? Math.max(1, qty) : Math.max(1, Math.min(qty, remaining));
   commitPick(confirmItem, qty);
   document.getElementById('sheetBackdrop').classList.remove('open');
   confirmItem = null;
