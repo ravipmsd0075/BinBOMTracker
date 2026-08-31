@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PMSD Picking List</title>
+
+<!-- PWA: installable + works offline. manifest.json, sw.js, and the icon-*.png
+     files must sit in the SAME folder as this HTML file on your host. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f5a623">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Picking List">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -345,6 +356,7 @@
     </div>
     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
       <div id="syncBadge" class="sync-badge offline">● Local only</div>
+      <div id="offlineQueueBadge" class="sync-badge" style="display:none; background: var(--amber-dim); color: var(--amber);"></div>
       <div id="pickerBadge" class="sync-badge offline" style="cursor:pointer;">👤 Set picker</div>
     </div>
   </div>
@@ -966,12 +978,18 @@ function initFirebase(){
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // Cache reads in IndexedDB so the app still shows the last-synced pick list
+    // and bin log if opened with no network at all (e.g. a dead warehouse Wi-Fi zone).
+    db.enablePersistence({ synchronizeTabs: true }).catch(err=>{
+      console.warn('Offline read cache unavailable:', err.code); // e.g. private browsing — app still works, just without offline reads
+    });
     setSyncBadge('connecting', 'Connecting…');
     firebase.auth().signInAnonymously().then(()=>{
       fbReady = true;
       document.getElementById('syncHint').textContent =
         'Connected. Every device using the same Session ID above sees this pick list and bin log live.';
       attachFirestoreListener();
+      processOfflineQueue(); // flush anything queued from a previous offline session
     }).catch(err=>{
       setSyncBadge('offline', 'Auth failed');
       toast('Firebase auth failed — check console', 'red');
@@ -1071,68 +1089,152 @@ function persistBulk(patch){
   }
 }
 
-// Atomic pick confirmation (transaction when online, direct mutation when local)
-// Looks up the item by its internal unique id — NOT by code, because master lists
-// sometimes reuse the same "code" (e.g. group letters like "A"/"B") across many
-// different items, which would otherwise update the wrong row.
-function persistPick(id, code, qty, bin, itemNameForLog, ts){
-  const logEntry = { code, name: itemNameForLog || '', qty, ts: ts || new Date().toISOString(), picker: pickerName || 'Unknown' };
-  if(FIREBASE_ENABLED && fbReady){
-    const ref = sessionDocRef();
-    db.runTransaction(tx => tx.get(ref).then(doc=>{
-      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
-      const list = data.pickList || [];
-      const idx = list.findIndex(i => i.id === id);
-      if(idx === -1) return; // item vanished — ignore
-      const remaining = list[idx].qtyReq - list[idx].qtyPicked;
-      const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
-      list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
-      const log = data.binLog || {};
-      if(!log[bin]) log[bin] = [];
-      log[bin] = [...log[bin], logEntry];
-      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
-    })).catch(err=>{ toast('Pick sync failed', 'red'); console.error(err); });
+/* ---------------- Offline pick queue ----------------
+   Firestore transactions (used for picks) can't be queued by the SDK's own
+   offline persistence — they need a live round-trip to read-then-write safely
+   across multiple devices. So when a pick/undo can't reach the server, we keep
+   it in this queue ourselves and replay it automatically once connectivity
+   returns. Local pickList/binLog are always updated immediately regardless of
+   connectivity, so the app is fully usable offline and never blocks on the
+   network — only the cross-device sync is delayed. */
+let offlineQueue = LS.get('wms_offline_queue', []);
+let queueProcessing = false;
+
+function updateOfflineQueueBadge(){
+  const badge = document.getElementById('offlineQueueBadge');
+  if(!badge) return;
+  if(offlineQueue.length > 0){
+    badge.style.display = '';
+    badge.textContent = '🟠 ' + offlineQueue.length + ' queued';
   } else {
-    const item = pickList.find(i => i.id === id);
-    if(item){
-      const remaining = item.qtyReq - item.qtyPicked;
-      const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
-      item.qtyPicked += applyQty;
+    badge.style.display = 'none';
+  }
+}
+
+function queueOfflineOp(op){
+  offlineQueue.push(op);
+  LS.set('wms_offline_queue', offlineQueue);
+  updateOfflineQueueBadge();
+}
+
+function applyPickTransaction(op){
+  const logEntry = { code: op.code, name: op.name || '', qty: op.qty, ts: op.ts, picker: op.picker || pickerName || 'Unknown' };
+  const ref = sessionDocRef();
+  return db.runTransaction(tx => tx.get(ref).then(doc=>{
+    const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+    const list = data.pickList || [];
+    const idx = list.findIndex(i => i.id === op.id);
+    if(idx === -1) return; // item vanished server-side — ignore
+    const remaining = list[idx].qtyReq - list[idx].qtyPicked;
+    const applyQty = overpickEnabled ? Math.max(0, op.qty) : Math.max(0, Math.min(op.qty, remaining));
+    list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
+    const log = data.binLog || {};
+    if(!log[op.bin]) log[op.bin] = [];
+    log[op.bin] = [...log[op.bin], logEntry];
+    tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+  }));
+}
+
+function applyUndoTransaction(op){
+  const ref = sessionDocRef();
+  return db.runTransaction(tx => tx.get(ref).then(doc=>{
+    const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
+    const list = data.pickList || [];
+    const idx = list.findIndex(i => i.id === op.id);
+    if(idx !== -1){
+      list[idx] = { ...list[idx], qtyPicked: Math.max(0, list[idx].qtyPicked - op.qty) };
     }
-    if(!binLog[bin]) binLog[bin] = [];
-    binLog[bin].push(logEntry);
-    saveAllLocal();
-    renderCurrentView();
-    refreshStats();
+    const log = data.binLog || {};
+    if(log[op.bin]) log[op.bin] = log[op.bin].filter(e => e.ts !== op.ts);
+    tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
+  }));
+}
+
+async function processOfflineQueue(){
+  if(queueProcessing) return;
+  if(!FIREBASE_ENABLED || !fbReady || !navigator.onLine || !offlineQueue.length) return;
+  queueProcessing = true;
+  const queueCopy = offlineQueue.slice();
+  let syncedAny = false;
+  for(const op of queueCopy){
+    try{
+      if(op.type === 'undo'){ await applyUndoTransaction(op); }
+      else { await applyPickTransaction(op); }
+      offlineQueue = offlineQueue.filter(o => o !== op);
+      LS.set('wms_offline_queue', offlineQueue);
+      updateOfflineQueueBadge();
+      syncedAny = true;
+    }catch(err){
+      console.error('Offline queue replay failed — will retry later', err);
+      break; // preserve order — stop here and retry the whole remaining batch next time
+    }
+  }
+  queueProcessing = false;
+  if(syncedAny && !offlineQueue.length) toast('All queued picks synced', 'green');
+}
+
+window.addEventListener('online', ()=>{
+  toast('Back online — syncing queued picks…', 'green');
+  processOfflineQueue();
+});
+window.addEventListener('offline', ()=>{
+  toast('Offline — picks are saved on this device and will sync later', 'amber');
+});
+
+// Atomic pick confirmation. Local state updates immediately (works fully offline);
+// the server write is attempted right away when possible, or queued and
+// auto-retried when not. Looks up the item by its internal unique id — NOT by
+// code, because master lists sometimes reuse the same "code" (e.g. group
+// letters like "A"/"B") across many different items, which would otherwise
+// update the wrong row.
+function persistPick(id, code, qty, bin, itemNameForLog, ts){
+  const finalTs = ts || new Date().toISOString();
+  const logEntry = { code, name: itemNameForLog || '', qty, ts: finalTs, picker: pickerName || 'Unknown' };
+
+  const item = pickList.find(i => i.id === id);
+  if(item){
+    const remaining = item.qtyReq - item.qtyPicked;
+    const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
+    item.qtyPicked += applyQty;
+  }
+  if(!binLog[bin]) binLog[bin] = [];
+  binLog[bin].push(logEntry);
+  saveAllLocal();
+  renderCurrentView();
+  refreshStats();
+
+  if(!FIREBASE_ENABLED) return;
+  const op = { type: 'pick', id, code, name: itemNameForLog || '', qty, bin, ts: finalTs, picker: pickerName || 'Unknown' };
+  if(fbReady && navigator.onLine){
+    applyPickTransaction(op).catch(err=>{
+      console.error('Pick sync failed — queued for retry', err);
+      queueOfflineOp(op);
+    });
+  } else {
+    queueOfflineOp(op);
   }
 }
 
 // Reverse a previously confirmed pick (rollback wrong qty / wrong item) — also by id
 function persistUndo(pick){
   if(!pick) return;
-  if(FIREBASE_ENABLED && fbReady){
-    const ref = sessionDocRef();
-    db.runTransaction(tx => tx.get(ref).then(doc=>{
-      const data = doc.exists ? doc.data() : { pickList: [], bins: DEFAULT_BINS, binLog: {} };
-      const list = data.pickList || [];
-      const idx = list.findIndex(i => i.id === pick.id);
-      if(idx !== -1){
-        list[idx] = { ...list[idx], qtyPicked: Math.max(0, list[idx].qtyPicked - pick.qty) };
-      }
-      const log = data.binLog || {};
-      if(log[pick.bin]) log[pick.bin] = log[pick.bin].filter(e => e.ts !== pick.ts);
-      tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
-    })).then(()=>{
-      toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
-    }).catch(err=>{ toast('Undo failed', 'red'); console.error(err); });
+  const item = pickList.find(i => i.id === pick.id);
+  if(item){ item.qtyPicked = Math.max(0, item.qtyPicked - pick.qty); }
+  if(binLog[pick.bin]) binLog[pick.bin] = binLog[pick.bin].filter(e => e.ts !== pick.ts);
+  saveAllLocal();
+  renderCurrentView();
+  refreshStats();
+  toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+
+  if(!FIREBASE_ENABLED) return;
+  const op = { type: 'undo', id: pick.id, bin: pick.bin, qty: pick.qty, ts: pick.ts };
+  if(fbReady && navigator.onLine){
+    applyUndoTransaction(op).catch(err=>{
+      console.error('Undo sync failed — queued for retry', err);
+      queueOfflineOp(op);
+    });
   } else {
-    const item = pickList.find(i => i.id === pick.id);
-    if(item){ item.qtyPicked = Math.max(0, item.qtyPicked - pick.qty); }
-    if(binLog[pick.bin]) binLog[pick.bin] = binLog[pick.bin].filter(e => e.ts !== pick.ts);
-    saveAllLocal();
-    renderCurrentView();
-    refreshStats();
-    toast('Undone: ' + pick.qty + ' × ' + pick.code, 'amber');
+    queueOfflineOp(op);
   }
 }
 
@@ -2443,7 +2545,17 @@ renderPending();
 renderScanPending();
 refreshStats();
 renderSavedBoms();
+updateOfflineQueueBadge();
 initFirebase();
+
+/* ---------------- PWA: register service worker for installability + offline app shell ---------------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>{
+      console.warn('Service worker registration failed (app still works online):', err);
+    });
+  });
+}
 </script>
 </body>
 </html>
