@@ -24,19 +24,45 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <style>
-  :root{
+  :root, [data-theme="dark"]{
     --bg: #10151b;
+    --bg-rgb: 16,21,27;
     --panel: #171f27;
     --panel-2: #1d2732;
     --line: #2a3542;
     --ink: #eef2f6;
+    --ink-fg: #12161c;
     --ink-dim: #9aabbb;
     --amber: #f5a623;
+    --amber-fg: #1a1300;
     --amber-dim: #7a5716;
     --green: #33c07a;
+    --green-fg: #06210f;
     --green-dim: #12331f;
     --red: #ef5b5b;
+    --red-fg: #2a0808;
     --red-dim: #3a1d1d;
+    --radius: 10px;
+  }
+  /* Light theme — teal palette to match the paired Store Intake app. */
+  [data-theme="light"]{
+    --bg: #dfe7e1;
+    --bg-rgb: 223,231,225;
+    --panel: #ffffff;
+    --panel-2: #eff4f1;
+    --line: #c7d3ce;
+    --ink: #0d2b30;
+    --ink-fg: #ffffff;
+    --ink-dim: #4b6067;
+    --amber: #005266;
+    --amber-fg: #ffffff;
+    --amber-dim: #d6eaee;
+    --green: #1f7a3d;
+    --green-fg: #ffffff;
+    --green-dim: #e4f3e8;
+    --red: #b3261e;
+    --red-fg: #ffffff;
+    --red-dim: #fbe4e2;
     --radius: 10px;
   }
   *{ box-sizing:border-box; }
@@ -48,12 +74,12 @@
     min-height: 100vh;
     padding-bottom: 90px;
   }
-  ::selection{ background: var(--amber); color:#1a1300; }
+  ::selection{ background: var(--amber); color:var(--amber-fg); }
 
   /* ---- Header ---- */
   header{
     position: sticky; top:0; z-index: 20;
-    background: linear-gradient(180deg, #10151b 80%, rgba(16,21,27,0));
+    background: linear-gradient(180deg, var(--bg) 80%, rgba(var(--bg-rgb),0));
     padding: 18px 16px 10px;
     border-bottom: 1px solid var(--line);
   }
@@ -62,10 +88,10 @@
   }
   .brand .mark{
     width:34px; height:34px; border-radius:8px;
-    background: repeating-linear-gradient(135deg, var(--amber) 0 4px, #1a1300 4px 8px);
+    background: repeating-linear-gradient(135deg, var(--amber) 0 4px, var(--amber-fg) 4px 8px);
     flex-shrink:0;
     position:relative;
-    border: 1px solid #3a2a0a;
+    border: 1px solid var(--amber-dim);
   }
   .brand .mark::after{
     content:""; position:absolute; inset:6px;
@@ -94,7 +120,7 @@
     transition: all .15s ease;
   }
   nav.tabs button.active{
-    background: var(--amber); color:#1a1300; border-color:var(--amber);
+    background: var(--amber); color:var(--amber-fg); border-color:var(--amber);
   }
   nav.tabs button.tabstat{
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -107,7 +133,7 @@
     font-family:'Space Grotesk', sans-serif; font-size:10px; font-weight:600; line-height:1;
   }
   nav.tabs button.tabstat .tn.amber-n{ color: var(--amber); }
-  nav.tabs button.tabstat.active .tn.amber-n{ color:#1a1300; }
+  nav.tabs button.tabstat.active .tn.amber-n{ color:var(--amber-fg); }
 
   main{ padding: 16px; max-width: 640px; margin: 0 auto; }
   section.view{ display:none; animation: fade .18s ease; }
@@ -145,10 +171,10 @@
     transition: transform .08s ease;
   }
   .btn:active{ transform: scale(0.98); }
-  .btn.primary{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
+  .btn.primary{ background: var(--amber); color:var(--amber-fg); border-color: var(--amber); }
   .btn.ghost{ background:transparent; }
   .btn.danger{ color: var(--red); border-color: var(--red-dim); }
-  .btn.torch-on{ background: var(--amber); color:#1a1300; border-color: var(--amber); }
+  .btn.torch-on{ background: var(--amber); color:var(--amber-fg); border-color: var(--amber); }
   .btn.sm{ padding:8px 12px; font-size:12.5px; width:auto; }
   .row{ display:flex; gap:8px; }
   .row > *{ flex:1; }
@@ -201,7 +227,7 @@
   .spick-row .sqty .l{ font-size:9.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; }
   .next-pill{
     display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em;
-    background: var(--amber); color:#1a1300; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px;
+    background: var(--amber); color:var(--amber-fg); padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px;
   }
   .swipe-hint{ font-size:10px; color:var(--ink-dim); text-align:right; margin-top:4px; }
 
@@ -261,15 +287,15 @@
   /* ---- toast ---- */
   #toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
-    background: var(--ink); color:#12161c; padding:11px 18px; border-radius:999px;
+    background: var(--ink); color:var(--ink-fg); padding:11px 18px; border-radius:999px;
     font-size:13px; font-weight:600; font-family:'Space Grotesk',sans-serif;
     opacity:0; transition: all .25s ease; z-index:60; pointer-events:none;
     box-shadow: 0 8px 24px rgba(0,0,0,.4);
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
-  #toast.green{ background: var(--green); color:#06210f; }
-  #toast.red{ background: var(--red); color:#2a0808; }
-  #toast.amber{ background: var(--amber); color:#1a1300; }
+  #toast.green{ background: var(--green); color:var(--green-fg); }
+  #toast.red{ background: var(--red); color:var(--red-fg); }
+  #toast.amber{ background: var(--amber); color:var(--amber-fg); }
 
   /* ---- bin log ---- */
   .bin-entry{
@@ -355,6 +381,7 @@
       <div class="sub" id="currentBomHeaderLabel">PMSD &middot; Scan &middot; Match &middot; Bin Track</div>
     </div>
     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+      <button id="themeToggle" class="sync-badge offline" style="cursor:pointer; border:none; font-family:inherit;" title="Switch theme">🌙 Dark</button>
       <div id="syncBadge" class="sync-badge offline">● Local only</div>
       <div id="offlineQueueBadge" class="sync-badge" style="display:none; background: var(--amber-dim); color: var(--amber);"></div>
       <div id="pickerBadge" class="sync-badge offline" style="cursor:pointer;">👤 Set picker</div>
@@ -760,6 +787,22 @@ let activeBin = LS.get('wms_active_bin', null);
 let sessionId = LS.get('wms_session_id', 'default');
 let pickerName = LS.get('wms_picker_name', '');
 let overpickEnabled = LS.get('wms_overpick_enabled', false);
+
+/* ---------------- Theme (dark default, light = teal palette) ---------------- */
+let appTheme = LS.get('wms_theme', 'dark');
+function applyTheme(theme){
+  appTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  LS.set('wms_theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if(btn) btn.textContent = theme === 'light' ? '☀️ Light' : '🌙 Dark';
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if(metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#005266' : '#f5a623');
+}
+applyTheme(appTheme);
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  applyTheme(appTheme === 'light' ? 'dark' : 'light');
+});
 
 /* ---------------- Admin PIN (never stored in plain text — salted SHA-256 hash only) ---------------- */
 let adminPinHash = LS.get('wms_admin_pin_hash', null); // { salt, hash } | null
