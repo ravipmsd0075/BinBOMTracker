@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';document.head.appendChild(s);"></script>
+<script src="https://unpkg.com/qrcode@1.5.0/build/qrcode.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js';document.head.appendChild(s);"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -1809,9 +1809,17 @@ function qrLabelMarkup(code, name, bin, canvasId){
 
 function paintQrCanvas(canvasId, payload){
   const el = document.getElementById(canvasId);
-  if(!el || typeof QRCode === 'undefined') return;
+  if(!el) return;
+  if(typeof QRCode === 'undefined'){
+    toast('QR library failed to load — check your internet connection and refresh', 'red');
+    console.error('QRCode library is undefined — script may have failed to load.');
+    return;
+  }
   QRCode.toCanvas(el, payload, { width: 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
-    if(err) console.error('QR render failed', err);
+    if(err){
+      console.error('QR render failed', err);
+      toast('QR render failed: ' + err.message, 'red');
+    }
   });
 }
 
