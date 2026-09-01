@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';document.head.appendChild(s);"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -369,6 +369,74 @@
     .print-table .status-done{ color:#146c43; font-weight:700; }
     .print-table .status-partial{ color:#a15c00; font-weight:700; }
   }
+
+  /* ---- QR Label Maker ---- */
+  .qr-mode-row{ display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .qr-mode-btn{
+    flex:1; min-width:96px; font-family:'Space Grotesk', sans-serif; font-size:12px; font-weight:600;
+    background: var(--panel-2); color: var(--ink-dim); border:1px solid var(--line);
+    padding:9px 8px; border-radius:8px; cursor:pointer; text-align:center;
+  }
+  .qr-mode-btn.active{ background: var(--amber); color:var(--amber-fg); border-color: var(--amber); }
+  .qr-mode-panel{ display:none; }
+  .qr-mode-panel.active{ display:block; }
+
+  .qr-search-results{ margin-top:8px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+  .qr-search-row{
+    background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;
+  }
+  .qr-search-row:active{ background: var(--amber-dim); border-color: var(--amber); }
+  .qr-search-row .info{ min-width:0; }
+  .qr-search-row .code{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; font-weight:600; }
+  .qr-search-row .name{ font-size:11.5px; color:var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qr-search-row .loc{ font-size:10.5px; color:var(--amber); flex-shrink:0; font-family:'IBM Plex Mono', monospace; }
+
+  .qr-bulk-row{
+    background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; display:flex; align-items:center; gap:10px; margin-bottom:6px;
+  }
+  .qr-bulk-row input[type=checkbox]{ width:16px; height:16px; accent-color: var(--amber); flex-shrink:0; }
+  .qr-bulk-row .info{ flex:1; min-width:0; }
+  .qr-bulk-row .code{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; font-weight:600; }
+  .qr-bulk-row .name{ font-size:11px; color:var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qr-bulk-row .copies{ width:56px; text-align:center; flex-shrink:0; padding:7px 4px; }
+
+  /* On-screen preview label — visual proxy for the printed label, always white/black like paper */
+  .qr-label-preview{
+    background:#fff; color:#000; border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:12px;
+  }
+  .qr-label-preview .l-info{ min-width:0; flex:1; }
+  .qr-label-preview .l-name{ font-size:12.5px; font-weight:700; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .qr-label-preview .l-code{ font-family:'IBM Plex Mono', monospace; font-size:11px; margin-top:4px; }
+  .qr-label-preview .l-bin{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:#555; margin-top:2px; }
+  .qr-label-preview .l-qr{ flex-shrink:0; text-align:center; }
+  .qr-label-preview .l-qr canvas{ display:block; width:76px; height:76px; }
+  .qr-label-preview .l-qr .l-qr-code{ font-family:'IBM Plex Mono', monospace; font-size:9px; margin-top:2px; }
+  .qr-preview-note{ font-size:11px; color:var(--ink-dim); text-align:center; margin-top:6px; }
+
+  /* ---- A4 QR label sheet (print only) ---- */
+  #printArea .qr-sheet{ display:grid; grid-template-columns: 1fr 1fr; gap: 4mm; padding: 8mm; }
+  #printArea .qr-label{
+    border: 1px dashed #666; border-radius: 3px; padding: 3mm 3.5mm;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:3mm;
+    min-height: 40mm; box-sizing:border-box; page-break-inside: avoid; break-inside: avoid; overflow:visible;
+  }
+  #printArea .qr-label .l-info{ min-width:0; flex:1; padding-top:1mm; }
+  #printArea .qr-label .l-name{
+    font-size:11.5pt; font-weight:800; line-height:1.25; color:#000;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  #printArea .qr-label .l-code{ font-family:'IBM Plex Mono', monospace; font-size:9.5pt; color:#000; margin-top:3mm; }
+  #printArea .qr-label .l-bin{ font-family:'IBM Plex Mono', monospace; font-size:9.5pt; color:#000; margin-top:1mm; }
+  #printArea .qr-label .l-qr{ flex-shrink:0; text-align:center; width:20mm; }
+  #printArea .qr-label .l-qr canvas{ width:20mm; height:20mm; display:block; }
+  #printArea .qr-label .l-qr-code{ font-family:'IBM Plex Mono', monospace; font-size:7pt; margin-top:1.5mm; color:#000; word-break:break-all; line-height:1.3; }
+  @media print{
+    #printArea .qr-sheet{ display:grid; }
+  }
 </style>
 </head>
 <body>
@@ -408,6 +476,9 @@
   </button>
   <button class="tabstat" data-tab="bin">
     <span class="tn" id="tabCountBin">0</span><span class="tl">Bin View</span>
+  </button>
+  <button class="tabstat" data-tab="qr">
+    <span class="tn">🏷️</span><span class="tl">QR Maker</span>
   </button>
   <button class="tabstat" data-tab="setup">
     <span class="tn">⚙</span><span class="tl">Setup</span>
@@ -552,6 +623,85 @@
       <div id="savedBomsList"></div>
     </div>
     <p class="hint" style="margin-top:10px;">Switching here changes what you pick against on the <b>Scan &amp; Pick</b> tab immediately — the picker always works the currently selected BOM's list.</p>
+  </section>
+
+  <!-- ===================== QR LABEL MAKER ===================== -->
+  <section class="view" id="view-qr">
+    <h2 class="section-title">QR Label Maker</h2>
+
+    <div class="qr-mode-row">
+      <button type="button" class="qr-mode-btn active" data-qrmode="single">🏷️ Single Label</button>
+      <button type="button" class="qr-mode-btn" data-qrmode="replace">♻️ Replace Damaged</button>
+      <button type="button" class="qr-mode-btn" data-qrmode="bulk">📦 Bulk Generate</button>
+    </div>
+
+    <!-- SINGLE / REPLACE shared panel -->
+    <div class="qr-mode-panel active" id="qrPanelSingle">
+      <div class="card">
+        <label>🔍 Search existing item (optional)</label>
+        <input type="text" id="qrItemSearchInput" placeholder="Search code, name, or bin...">
+        <div class="qr-search-results" id="qrSearchResults"></div>
+      </div>
+      <div class="card">
+        <label>Item Code</label>
+        <input type="text" id="qrCodeInput" placeholder="e.g. RM-4501">
+        <label style="margin-top:10px;">Item Name</label>
+        <input type="text" id="qrNameInput" placeholder="e.g. HEX BOLT M6 x 20">
+        <label style="margin-top:10px;">Bin / Location</label>
+        <input type="text" id="qrBinInput" placeholder="e.g. RM-S644-B001">
+        <label style="margin-top:10px;" id="qrCopiesLabel">Number of Copies</label>
+        <input type="number" id="qrCopiesInput" value="1" min="1" max="200" inputmode="numeric">
+        <div class="foot-actions" style="flex-wrap:wrap;">
+          <button class="btn primary" id="btnQrGenerate" style="flex:1;">Generate QR</button>
+          <button class="btn ghost" id="btnQrClear" style="flex:1;">Clear</button>
+        </div>
+        <button class="btn ghost sm" id="btnQrPrintA4" style="width:100%; margin-top:8px; display:none;">🖨️ Print A4</button>
+        <p class="hint" id="qrReplaceHint" style="display:none;">Replace Damaged QR: search or type the item, then Generate — copies is locked to 1 and it goes straight to a printable label for a quick reprint.</p>
+      </div>
+      <div id="qrSinglePreviewWrap"></div>
+    </div>
+
+    <!-- BULK panel -->
+    <div class="qr-mode-panel" id="qrPanelBulk">
+      <div class="card">
+        <label>Select items from the current BOM <span class="count" id="qrBulkCount">0 selected</span></label>
+        <input type="text" id="qrBulkSearchInput" placeholder="🔍 Filter items to select from...">
+        <div class="row" style="margin-top:8px;">
+          <button class="btn sm ghost" id="btnQrBulkSelectAll" style="width:auto;">Select All</button>
+          <button class="btn sm ghost" id="btnQrBulkSelectNone" style="width:auto;">Select None</button>
+        </div>
+        <div id="qrBulkList" style="margin-top:10px;"></div>
+        <p class="hint" id="qrBulkEmptyHint" style="display:none;">No items in the current BOM yet — load a pick list on the Setup tab first, or use Single Label mode to type one manually.</p>
+      </div>
+      <div class="foot-actions">
+        <button class="btn primary" id="btnQrBulkGenerate">Generate All Labels</button>
+      </div>
+
+      <div class="divider-label">or bulk-enter directly</div>
+
+      <div class="card">
+        <label>✍️ Manual Bulk Entry — Item Code, Item Name, Bin, Copies (one per line)</label>
+        <textarea id="qrBulkManualInput" placeholder="RM-4501, Hex Bolt M6x20, Rack A-02, 5&#10;RM-4502, Washer 6mm, Rack A-03, 2&#10;RM-4503, Nut M6, Rack A-03, 10"></textarea>
+        <p class="hint">Copies column is optional — leave it out and it defaults to 1. Paste directly from Excel (tab-separated) or comma-separated.</p>
+        <div class="foot-actions">
+          <button class="btn primary" id="btnQrBulkManualGenerate">Generate &amp; Print A4</button>
+          <button class="btn ghost" id="btnQrBulkManualClear">Clear</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>📊 Upload Excel — same column order: Item Code, Item Name, Bin, Copies</label>
+        <input type="file" id="qrBulkExcelInput" accept=".xlsx,.xls" style="display:none;">
+        <button class="btn primary" id="btnQrBulkPickExcel">📊 Choose Excel File &amp; Print A4</button>
+        <div id="qrBulkExcelFileName" class="hint"></div>
+        <p class="hint">Header row (e.g. "Item Code...") is detected and skipped automatically. Copies column is optional and defaults to 1.</p>
+      </div>
+
+      <button class="btn ghost sm" id="btnQrBulkPrintA4" style="width:100%; margin-top:8px; display:none;">🖨️ Print A4</button>
+      <div id="qrBulkPreviewWrap"></div>
+    </div>
+
+    <p class="hint" style="margin-top:14px;">Each QR encodes the item code, name, and bin as structured data, so scanning a label on the Scan &amp; Pick tab identifies the item directly — same as scanning its original barcode.</p>
   </section>
 
   <!-- ===================== SETUP ===================== -->
@@ -1320,6 +1470,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.tab === 'list') renderPickList();
     if(btn.dataset.tab === 'pending') renderPending();
     if(btn.dataset.tab === 'bin') renderBinSelect();
+    if(btn.dataset.tab === 'qr') renderQrTab();
     if(btn.dataset.tab === 'setup') renderSetup();
     stopAllScanners();
   });
@@ -1474,17 +1625,21 @@ function printBinLabel(bin){
   const printArea = document.getElementById('printArea');
   printArea.innerHTML =
     '<div class="print-label">' +
-      '<svg id="printBarcodeSvg"></svg>' +
+      '<canvas id="printBinQrCanvas" style="width:220px;height:220px;"></canvas>' +
+      '<div class="print-label-title">' + escapeHtml(bin) + '</div>' +
       '<div class="print-label-meta">' + (itemCount ? (itemCount + ' item type' + (itemCount===1?'':'s') + ' · ' + totalQty + ' pcs logged') : 'No material logged into this bin yet') + '</div>' +
       '<div class="print-label-meta">' + escapeHtml(currentBomName) + ' · ' + new Date().toLocaleDateString() + '</div>' +
     '</div>';
   try{
-    JsBarcode('#printBarcodeSvg', bin, { format: 'CODE128', width: 2, height: 60, displayValue: true, fontSize: 16, margin: 8 });
+    if(typeof QRCode === 'undefined') throw new Error('QR library not loaded');
+    // Plain bin ID (not JSON) so scanning it still works with the existing
+    // "select/activate bin by scan" flows, which expect the raw bin text.
+    QRCode.toCanvas(document.getElementById('printBinQrCanvas'), bin, { width: 220, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
   }catch(err){
-    toast('Could not generate a barcode for this bin ID', 'red');
+    toast('Could not generate a QR code for this bin ID', 'red');
     return;
   }
-  setTimeout(()=> window.print(), 100); // let the SVG paint before the print snapshot is taken
+  setTimeout(()=> window.print(), 150); // let the QR canvas paint before the print snapshot is taken
 }
 
 function printJobSummary(){
@@ -1556,6 +1711,338 @@ document.getElementById('btnDownloadTemplate').addEventListener('click', ()=>{
   downloadRowsAsXlsx(rows, headers, 'pick_list_template.xlsx', 'Template');
   toast('Template downloaded', 'green');
 });
+
+/* ================================================================
+   QR LABEL MAKER
+   Reuses the existing pickList as the item master (code/name/location),
+   the existing #printArea + window.print() flow, and escapeHtml/toast.
+   QR payload: {"type":"inventory_item","itemCode":...,"itemName":...,"bin":...}
+   ================================================================ */
+const QR_PAYLOAD_TYPE = 'inventory_item';
+
+function buildQrPayload(code, name, bin){
+  return JSON.stringify({ type: QR_PAYLOAD_TYPE, itemCode: code, itemName: name || '', bin: bin || '' });
+}
+
+// Tries to read a scanned string as an inventory QR label; returns null for
+// plain barcodes/text so existing scanning behaviour is untouched.
+function parseInventoryQr(text){
+  if(!text || text[0] !== '{') return null;
+  try{
+    const obj = JSON.parse(text);
+    if(obj && obj.type === QR_PAYLOAD_TYPE && obj.itemCode) return obj;
+  }catch(e){ /* not JSON — treat as a normal scanned code */ }
+  return null;
+}
+
+let qrMode = 'single';
+document.querySelectorAll('.qr-mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.qr-mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    qrMode = btn.dataset.qrmode;
+    const isBulk = qrMode === 'bulk';
+    document.getElementById('qrPanelSingle').classList.toggle('active', !isBulk);
+    document.getElementById('qrPanelBulk').classList.toggle('active', isBulk);
+    const isReplace = qrMode === 'replace';
+    document.getElementById('qrReplaceHint').style.display = isReplace ? 'block' : 'none';
+    document.getElementById('qrCopiesLabel').textContent = isReplace ? 'Copies (locked to 1)' : 'Number of Copies';
+    const copiesInput = document.getElementById('qrCopiesInput');
+    if(isReplace){ copiesInput.value = 1; copiesInput.setAttribute('disabled', 'disabled'); }
+    else copiesInput.removeAttribute('disabled');
+    document.getElementById('btnQrGenerate').textContent = isReplace ? '♻️ Generate & Print' : 'Generate QR';
+    if(!isBulk){
+      document.getElementById('qrSinglePreviewWrap').innerHTML = '';
+      document.getElementById('btnQrPrintA4').style.display = 'none';
+    }
+  });
+});
+
+/* ---- Search existing items (current BOM's pick list acts as the item master) ---- */
+function qrItemMasterList(){
+  return pickList; // {code, name, location, ...}
+}
+
+document.getElementById('qrItemSearchInput').addEventListener('input', (e)=>{
+  const q = normalizeForMatch(e.target.value);
+  const resultsEl = document.getElementById('qrSearchResults');
+  if(!q){ resultsEl.innerHTML = ''; return; }
+  const matches = qrItemMasterList().filter(i=>
+    normalizeForMatch(i.code).includes(q) || normalizeForMatch(i.name).includes(q) || normalizeForMatch(i.location).includes(q)
+  ).slice(0, 20);
+  resultsEl.innerHTML = matches.length ? matches.map(i =>
+    `<div class="qr-search-row" data-code="${escapeHtml(i.code)}">
+      <div class="info">
+        <div class="code">${escapeHtml(i.code)}</div>
+        <div class="name">${escapeHtml(i.name || '')}</div>
+      </div>
+      <div class="loc">${escapeHtml(i.location || '')}</div>
+    </div>`
+  ).join('') : '<p class="hint">No matching items in the current BOM.</p>';
+  resultsEl.querySelectorAll('.qr-search-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const item = qrItemMasterList().find(i => i.code === row.dataset.code);
+      if(!item) return;
+      document.getElementById('qrCodeInput').value = item.code;
+      document.getElementById('qrNameInput').value = item.name || '';
+      document.getElementById('qrBinInput').value = item.location || '';
+      resultsEl.innerHTML = '';
+      document.getElementById('qrItemSearchInput').value = '';
+      toast('Filled from ' + item.code, 'green');
+    });
+  });
+});
+
+/* ---- Render one label's markup (shared by on-screen preview + print sheet) ---- */
+function qrLabelMarkup(code, name, bin, canvasId){
+  return `
+    <div class="l-info">
+      <div class="l-name">${escapeHtml(name || '(no name)')}</div>
+      <div class="l-code">Item: ${escapeHtml(code)}</div>
+      ${bin ? `<div class="l-bin">Bin: ${escapeHtml(bin)}</div>` : ''}
+    </div>
+    <div class="l-qr">
+      <canvas id="${canvasId}"></canvas>
+      <div class="l-qr-code">${escapeHtml(code)}</div>
+    </div>`;
+}
+
+function paintQrCanvas(canvasId, payload){
+  const el = document.getElementById(canvasId);
+  if(!el || typeof QRCode === 'undefined') return;
+  QRCode.toCanvas(el, payload, { width: 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+    if(err) console.error('QR render failed', err);
+  });
+}
+
+/* ---- Single / Replace ---- */
+function currentSingleEntry(){
+  const code = document.getElementById('qrCodeInput').value.trim();
+  const name = document.getElementById('qrNameInput').value.trim();
+  const bin = document.getElementById('qrBinInput').value.trim();
+  let copies = parseInt(document.getElementById('qrCopiesInput').value, 10);
+  if(!copies || copies < 1) copies = 1;
+  if(qrMode === 'replace') copies = 1;
+  return { code, name, bin, copies };
+}
+
+document.getElementById('btnQrGenerate').addEventListener('click', ()=>{
+  const entry = currentSingleEntry();
+  if(!entry.code){ toast('Enter or select an Item Code first', 'red'); return; }
+  const previewWrap = document.getElementById('qrSinglePreviewWrap');
+  const payload = buildQrPayload(entry.code, entry.name, entry.bin);
+  previewWrap.innerHTML =
+    `<div class="qr-label-preview">${qrLabelMarkup(entry.code, entry.name, entry.bin, 'qrPreviewCanvas')}</div>` +
+    `<p class="qr-preview-note">${entry.copies} label${entry.copies===1?'':'s'} will print on A4${entry.bin?' · Bin ' + escapeHtml(entry.bin):''}</p>`;
+  paintQrCanvas('qrPreviewCanvas', payload);
+  document.getElementById('btnQrPrintA4').style.display = '';
+  qrSingleQueueEntry = entry;
+  if(qrMode === 'replace'){
+    printQrLabelSheet([entry]);
+  }
+});
+
+let qrSingleQueueEntry = null;
+document.getElementById('btnQrPrintA4').addEventListener('click', ()=>{
+  if(!qrSingleQueueEntry){ toast('Generate a label first', 'red'); return; }
+  printQrLabelSheet([qrSingleQueueEntry]);
+});
+
+document.getElementById('btnQrClear').addEventListener('click', ()=>{
+  document.getElementById('qrCodeInput').value = '';
+  document.getElementById('qrNameInput').value = '';
+  document.getElementById('qrBinInput').value = '';
+  document.getElementById('qrCopiesInput').value = '1';
+  document.getElementById('qrItemSearchInput').value = '';
+  document.getElementById('qrSearchResults').innerHTML = '';
+  document.getElementById('qrSinglePreviewWrap').innerHTML = '';
+  document.getElementById('btnQrPrintA4').style.display = 'none';
+  qrSingleQueueEntry = null;
+});
+
+/* ---- Bulk ---- */
+let qrBulkCopies = {}; // code -> copies, remembered across re-renders/filtering
+function renderQrBulkList(){
+  const items = qrItemMasterList();
+  const emptyHint = document.getElementById('qrBulkEmptyHint');
+  emptyHint.style.display = items.length ? 'none' : 'block';
+  const q = normalizeForMatch(document.getElementById('qrBulkSearchInput').value);
+  const filtered = q ? items.filter(i=>
+    normalizeForMatch(i.code).includes(q) || normalizeForMatch(i.name).includes(q) || normalizeForMatch(i.location).includes(q)
+  ) : items;
+  const listEl = document.getElementById('qrBulkList');
+  listEl.innerHTML = filtered.map(i => {
+    const checked = qrBulkCopies[i.code] != null;
+    const copies = qrBulkCopies[i.code] || 1;
+    return `<div class="qr-bulk-row">
+      <input type="checkbox" class="qrBulkCheck" data-code="${escapeHtml(i.code)}" ${checked ? 'checked' : ''}>
+      <div class="info">
+        <div class="code">${escapeHtml(i.code)}</div>
+        <div class="name">${escapeHtml(i.name || '')}${i.location ? ' · ' + escapeHtml(i.location) : ''}</div>
+      </div>
+      <input type="number" class="qrBulkCopies" data-code="${escapeHtml(i.code)}" value="${copies}" min="1" max="200" inputmode="numeric">
+    </div>`;
+  }).join('') || '<p class="hint">No items match this filter.</p>';
+
+  listEl.querySelectorAll('.qrBulkCheck').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const code = cb.dataset.code;
+      if(cb.checked) qrBulkCopies[code] = qrBulkCopies[code] || 1;
+      else delete qrBulkCopies[code];
+      updateQrBulkCount();
+    });
+  });
+  listEl.querySelectorAll('.qrBulkCopies').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const code = inp.dataset.code;
+      if(qrBulkCopies[code] == null) return; // only track copies for checked rows
+      let v = parseInt(inp.value, 10);
+      if(!v || v < 1) v = 1;
+      qrBulkCopies[code] = v;
+    });
+  });
+  updateQrBulkCount();
+}
+function updateQrBulkCount(){
+  document.getElementById('qrBulkCount').textContent = Object.keys(qrBulkCopies).length + ' selected';
+}
+document.getElementById('qrBulkSearchInput').addEventListener('input', renderQrBulkList);
+document.getElementById('btnQrBulkSelectAll').addEventListener('click', ()=>{
+  qrItemMasterList().forEach(i=>{ if(qrBulkCopies[i.code] == null) qrBulkCopies[i.code] = 1; });
+  renderQrBulkList();
+});
+document.getElementById('btnQrBulkSelectNone').addEventListener('click', ()=>{
+  qrBulkCopies = {};
+  renderQrBulkList();
+});
+
+/* ---- Shared: render a bulk queue's on-screen preview into a given wrapper ---- */
+function renderQrBulkQueuePreview(queue, wrapId){
+  const previewWrap = document.getElementById(wrapId);
+  const totalLabels = queue.reduce((s,e)=> s + e.copies, 0);
+  previewWrap.innerHTML = queue.map((e, idx)=>
+    `<div class="qr-label-preview">${qrLabelMarkup(e.code, e.name, e.bin, 'qrBulkPreviewCanvas' + idx)}</div>`
+  ).join('') + `<p class="qr-preview-note">${queue.length} item type${queue.length===1?'':'s'} · ${totalLabels} label${totalLabels===1?'':'s'} total will print on A4</p>`;
+  queue.forEach((e, idx)=> paintQrCanvas('qrBulkPreviewCanvas' + idx, buildQrPayload(e.code, e.name, e.bin)));
+  return totalLabels;
+}
+
+let qrBulkQueue = [];
+document.getElementById('btnQrBulkGenerate').addEventListener('click', ()=>{
+  const items = qrItemMasterList();
+  const codes = Object.keys(qrBulkCopies);
+  if(!codes.length){ toast('Select at least one item', 'red'); return; }
+  qrBulkQueue = codes.map(code=>{
+    const item = items.find(i => i.code === code);
+    return { code, name: item ? item.name : '', bin: item ? item.location : '', copies: qrBulkCopies[code] || 1 };
+  });
+  const totalLabels = renderQrBulkQueuePreview(qrBulkQueue, 'qrBulkPreviewWrap');
+  document.getElementById('btnQrBulkPrintA4').style.display = '';
+  toast(totalLabels + ' label(s) ready — tap Print A4', 'green');
+});
+document.getElementById('btnQrBulkPrintA4').addEventListener('click', ()=>{
+  if(!qrBulkQueue.length){ toast('Generate labels first', 'red'); return; }
+  printQrLabelSheet(qrBulkQueue);
+});
+
+/* ---- Manual bulk entry: paste rows, generate + print immediately ---- */
+function parseQrBulkLines(raw){
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  return lines.map(line=>{
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const code = (parts[0]||'').trim();
+    const name = (parts[1]||'').trim();
+    const bin = (parts[2]||'').trim();
+    let copies = parseInt((parts[3]||'1').trim(), 10);
+    if(!copies || copies < 1) copies = 1;
+    return { code, name, bin, copies };
+  }).filter(e=>e.code);
+}
+
+document.getElementById('btnQrBulkManualGenerate').addEventListener('click', ()=>{
+  const raw = document.getElementById('qrBulkManualInput').value.trim();
+  if(!raw){ toast('Paste item rows first', 'red'); return; }
+  const parsed = parseQrBulkLines(raw);
+  if(!parsed.length){ toast('Could not read any rows — check Code, Name, Bin, Copies order', 'red'); return; }
+  qrBulkQueue = parsed;
+  const totalLabels = renderQrBulkQueuePreview(qrBulkQueue, 'qrBulkPreviewWrap');
+  document.getElementById('btnQrBulkPrintA4').style.display = '';
+  toast('Printing ' + totalLabels + ' label(s)…', 'green');
+  printQrLabelSheet(qrBulkQueue);
+});
+document.getElementById('btnQrBulkManualClear').addEventListener('click', ()=>{
+  document.getElementById('qrBulkManualInput').value = '';
+});
+
+/* ---- Excel bulk entry: same column order as manual paste, generate + print immediately ---- */
+document.getElementById('btnQrBulkPickExcel').addEventListener('click', ()=>{
+  document.getElementById('qrBulkExcelInput').click();
+});
+document.getElementById('qrBulkExcelInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const fileNameEl = document.getElementById('qrBulkExcelFileName');
+  fileNameEl.textContent = 'Reading ' + file.name + ' …';
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      let startRow = 0;
+      if(rows.length && String(rows[0][0]).toLowerCase().includes('item')) startRow = 1;
+      const parsed = [];
+      for(let i = startRow; i < rows.length; i++){
+        const r = rows[i];
+        const code = String(r[0] ?? '').trim();
+        if(!code) continue;
+        const name = String(r[1] ?? '').trim();
+        const bin = String(r[2] ?? '').trim();
+        let copies = parseInt(r[3], 10);
+        if(!copies || copies < 1) copies = 1;
+        parsed.push({ code, name, bin, copies });
+      }
+      if(!parsed.length){
+        toast('No valid rows found in that sheet', 'red');
+        fileNameEl.textContent = '';
+        return;
+      }
+      qrBulkQueue = parsed;
+      const totalLabels = renderQrBulkQueuePreview(qrBulkQueue, 'qrBulkPreviewWrap');
+      document.getElementById('btnQrBulkPrintA4').style.display = '';
+      fileNameEl.textContent = '✓ Loaded ' + parsed.length + ' rows from ' + file.name;
+      toast('Printing ' + totalLabels + ' label(s)…', 'green');
+      printQrLabelSheet(qrBulkQueue);
+    }catch(err){
+      toast('Could not read that Excel file', 'red');
+      fileNameEl.textContent = '';
+    }
+    e.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+/* ---- Shared: expand a queue of {code,name,bin,copies} into an A4 label grid and print ---- */
+function printQrLabelSheet(queue){
+  if(!queue || !queue.length){ toast('Nothing to print', 'red'); return; }
+  const flatLabels = [];
+  queue.forEach(entry=>{
+    const n = Math.max(1, entry.copies || 1);
+    for(let c = 0; c < n; c++) flatLabels.push(entry);
+  });
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = '<div class="qr-sheet">' +
+    flatLabels.map((e, idx) => `<div class="qr-label">${qrLabelMarkup(e.code, e.name, e.bin, 'qrPrintCanvas' + idx)}</div>`).join('') +
+    '</div>';
+  flatLabels.forEach((e, idx) => paintQrCanvas('qrPrintCanvas' + idx, buildQrPayload(e.code, e.name, e.bin)));
+  setTimeout(()=> window.print(), 150); // let all QR canvases paint before the print snapshot is taken
+}
+
+function renderQrTab(){
+  document.getElementById('qrSearchResults').innerHTML = '';
+  renderQrBulkList();
+}
 
 /* ---------------- Material log downloads: bin, item, qty, picker, date, time ---------------- */
 function binLogEntryToRow(bin, e){
@@ -2317,7 +2804,11 @@ function findPickListItem(scanned){
   return item || null;
 }
 
-function handleItemScan(code){
+function handleItemScan(rawCode){
+  // QR Label Maker labels encode structured JSON — unwrap it to the item code
+  // transparently so scanning one works exactly like scanning a plain barcode.
+  const inventoryQr = parseInventoryQr(rawCode);
+  const code = inventoryQr ? inventoryQr.itemCode : rawCode;
   if(!activeBin){
     toast('Set an active bin first', 'red');
     scanFeedback('warn');
