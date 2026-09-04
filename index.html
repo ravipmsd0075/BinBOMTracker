@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/qrcode@1.5.0/build/qrcode.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js';document.head.appendChild(s);"></script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';document.head.appendChild(s);"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -1619,27 +1619,29 @@ function downloadRowsAsXlsx(rows, headers, filename, sheetName){
 /* ---------------- Printing: bin label barcode + job summary ---------------- */
 function printBinLabel(bin){
   if(!bin){ toast('Select a bin first', 'red'); return; }
-  const entries = binLog[bin] || [];
-  const itemCount = new Set(entries.map(e => e.code)).size;
-  const totalQty = entries.reduce((s, e) => s + e.qty, 0);
-  const printArea = document.getElementById('printArea');
-  printArea.innerHTML =
-    '<div class="print-label">' +
-      '<canvas id="printBinQrCanvas" style="width:220px;height:220px;"></canvas>' +
-      '<div class="print-label-title">' + escapeHtml(bin) + '</div>' +
-      '<div class="print-label-meta">' + (itemCount ? (itemCount + ' item type' + (itemCount===1?'':'s') + ' · ' + totalQty + ' pcs logged') : 'No material logged into this bin yet') + '</div>' +
-      '<div class="print-label-meta">' + escapeHtml(currentBomName) + ' · ' + new Date().toLocaleDateString() + '</div>' +
-    '</div>';
-  try{
-    if(typeof QRCode === 'undefined') throw new Error('QR library not loaded');
+  ensureQrLib((ready)=>{
+    if(!ready){
+      toast('QR library failed to load — check your internet connection and reload the page', 'red');
+      return;
+    }
+    const entries = binLog[bin] || [];
+    const itemCount = new Set(entries.map(e => e.code)).size;
+    const totalQty = entries.reduce((s, e) => s + e.qty, 0);
+    const printArea = document.getElementById('printArea');
+    printArea.innerHTML =
+      '<div class="print-label">' +
+        '<canvas id="printBinQrCanvas" style="width:220px;height:220px;"></canvas>' +
+        '<div class="print-label-title">' + escapeHtml(bin) + '</div>' +
+        '<div class="print-label-meta">' + (itemCount ? (itemCount + ' item type' + (itemCount===1?'':'s') + ' · ' + totalQty + ' pcs logged') : 'No material logged into this bin yet') + '</div>' +
+        '<div class="print-label-meta">' + escapeHtml(currentBomName) + ' · ' + new Date().toLocaleDateString() + '</div>' +
+      '</div>';
     // Plain bin ID (not JSON) so scanning it still works with the existing
     // "select/activate bin by scan" flows, which expect the raw bin text.
-    QRCode.toCanvas(document.getElementById('printBinQrCanvas'), bin, { width: 220, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
-  }catch(err){
-    toast('Could not generate a QR code for this bin ID', 'red');
-    return;
-  }
-  setTimeout(()=> window.print(), 150); // let the QR canvas paint before the print snapshot is taken
+    QRCode.toCanvas(document.getElementById('printBinQrCanvas'), bin, { width: 220, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+      if(err){ toast('Could not generate a QR code for this bin ID', 'red'); return; }
+      setTimeout(()=> window.print(), 100); // let the QR canvas paint before the print snapshot is taken
+    });
+  });
 }
 
 function printJobSummary(){
@@ -1807,19 +1809,28 @@ function qrLabelMarkup(code, name, bin, canvasId){
     </div>`;
 }
 
+// The QRCode library loads from a CDN and its fallback mirror is injected
+// asynchronously if the first one fails — so it may genuinely not be ready
+// yet the instant a Generate/Print button is pressed. Retry briefly instead
+// of failing silently (which is what caused QR codes to just not appear).
+function ensureQrLib(callback, attemptsLeft){
+  if(typeof QRCode !== 'undefined'){ callback(true); return; }
+  attemptsLeft = attemptsLeft === undefined ? 10 : attemptsLeft;
+  if(attemptsLeft <= 0){ callback(false); return; }
+  setTimeout(()=> ensureQrLib(callback, attemptsLeft - 1), 300);
+}
+
 function paintQrCanvas(canvasId, payload){
   const el = document.getElementById(canvasId);
   if(!el) return;
-  if(typeof QRCode === 'undefined'){
-    toast('QR library failed to load — check your internet connection and refresh', 'red');
-    console.error('QRCode library is undefined — script may have failed to load.');
-    return;
-  }
-  QRCode.toCanvas(el, payload, { width: 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
-    if(err){
-      console.error('QR render failed', err);
-      toast('QR render failed: ' + err.message, 'red');
+  ensureQrLib((ready)=>{
+    if(!ready){
+      toast('QR library failed to load — check your internet connection and reload the page', 'red');
+      return;
     }
+    QRCode.toCanvas(el, payload, { width: 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+      if(err) console.error('QR render failed', err);
+    });
   });
 }
 
@@ -2034,17 +2045,29 @@ document.getElementById('qrBulkExcelInput').addEventListener('change', (e)=>{
 /* ---- Shared: expand a queue of {code,name,bin,copies} into an A4 label grid and print ---- */
 function printQrLabelSheet(queue){
   if(!queue || !queue.length){ toast('Nothing to print', 'red'); return; }
-  const flatLabels = [];
-  queue.forEach(entry=>{
-    const n = Math.max(1, entry.copies || 1);
-    for(let c = 0; c < n; c++) flatLabels.push(entry);
+  ensureQrLib((ready)=>{
+    if(!ready){
+      toast('QR library failed to load — check your internet connection and reload the page', 'red');
+      return;
+    }
+    const flatLabels = [];
+    queue.forEach(entry=>{
+      const n = Math.max(1, entry.copies || 1);
+      for(let c = 0; c < n; c++) flatLabels.push(entry);
+    });
+    const printArea = document.getElementById('printArea');
+    printArea.innerHTML = '<div class="qr-sheet">' +
+      flatLabels.map((e, idx) => `<div class="qr-label">${qrLabelMarkup(e.code, e.name, e.bin, 'qrPrintCanvas' + idx)}</div>`).join('') +
+      '</div>';
+    let painted = 0;
+    flatLabels.forEach((e, idx) => {
+      QRCode.toCanvas(document.getElementById('qrPrintCanvas' + idx), buildQrPayload(e.code, e.name, e.bin), { width: 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+        if(err) console.error('QR render failed', err);
+        painted++;
+        if(painted === flatLabels.length) setTimeout(()=> window.print(), 100);
+      });
+    });
   });
-  const printArea = document.getElementById('printArea');
-  printArea.innerHTML = '<div class="qr-sheet">' +
-    flatLabels.map((e, idx) => `<div class="qr-label">${qrLabelMarkup(e.code, e.name, e.bin, 'qrPrintCanvas' + idx)}</div>`).join('') +
-    '</div>';
-  flatLabels.forEach((e, idx) => paintQrCanvas('qrPrintCanvas' + idx, buildQrPayload(e.code, e.name, e.bin)));
-  setTimeout(()=> window.print(), 150); // let all QR canvases paint before the print snapshot is taken
 }
 
 function renderQrTab(){
