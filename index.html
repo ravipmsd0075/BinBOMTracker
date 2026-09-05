@@ -599,6 +599,9 @@
     <div class="foot-actions" id="binLogDownloadRow" style="display:none; margin-top:10px;">
       <button class="btn ghost sm" id="btnDownloadBinLog" style="width:100%;">⬇ Download This Bin's Log (.xlsx)</button>
     </div>
+    <div class="foot-actions" id="binTransferRow" style="display:none; margin-top:8px;">
+      <button class="btn primary sm" id="btnOpenTransfer" style="width:100%;">🔀 Transfer Material</button>
+    </div>
 
     <h2 class="section-title" style="margin-top:22px;">Picker Summary <span class="count">who picked what, all bins</span></h2>
     <div class="card" id="pickerSummaryCard"></div>
@@ -891,6 +894,34 @@
     <div class="foot-actions">
       <button class="btn ghost" id="btnNewBomCancel">Cancel</button>
       <button class="btn primary" id="btnNewBomCreate">Create BOM</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer material between bins — moves qty in binLog only, never touches pick-list progress -->
+<div class="sheet-backdrop" id="sheetTransfer">
+  <div class="sheet">
+    <h3>Transfer Material</h3>
+    <p class="hint">Move some quantity of an item from one bin to another. This only relocates it — the pick list's picked/required counts are untouched.</p>
+    <label>From bin</label>
+    <div class="meta" id="transferFromBinLabel">—</div>
+    <label style="margin-top:12px;">Item</label>
+    <select id="transferItemSelect"></select>
+    <label style="margin-top:12px;">Quantity to transfer <span id="transferAvailLabel" style="text-transform:none; letter-spacing:0;"></span></label>
+    <div class="qty-stepper">
+      <button type="button" id="transferQtyMinus">−</button>
+      <input type="number" id="transferQtyInput" value="1" min="1">
+      <button type="button" id="transferQtyPlus">+</button>
+    </div>
+    <label style="margin-top:12px;">To bin</label>
+    <div class="row">
+      <select id="transferToBinSelect"></select>
+      <input type="text" id="transferToBinNew" placeholder="or type a new bin ID" style="display:none;">
+    </div>
+    <label class="checkline"><input type="checkbox" id="transferToBinNewToggle"> Bin isn't in the list — type a new one</label>
+    <div class="foot-actions">
+      <button class="btn ghost" id="btnTransferCancel">Cancel</button>
+      <button class="btn primary" id="btnTransferConfirm">Transfer</button>
     </div>
   </div>
 </div>
@@ -1352,6 +1383,7 @@ async function processOfflineQueue(){
   for(const op of queueCopy){
     try{
       if(op.type === 'undo'){ await applyUndoTransaction(op); }
+      else if(op.type === 'transfer'){ await applyTransferOp(op); }
       else { await applyPickTransaction(op); }
       offlineQueue = offlineQueue.filter(o => o !== op);
       LS.set('wms_offline_queue', offlineQueue);
@@ -1444,6 +1476,45 @@ function persistBinOnlyLog(bin, code, name, qty){
     binLog[bin].push(logEntry);
     saveAllLocal();
     refreshStats();
+  }
+}
+
+// Move qty of an item from one bin to another. Only touches binLog (two
+// balanced entries: a negative "transfer-out" on the source, a positive
+// "transfer-in" on the destination) — pick-list required/picked counts are
+// never touched, since the item isn't being (un)picked, just relocated.
+function applyTransferOp(op){
+  const ref = sessionDocRef();
+  return ref.set({
+    binLog: {
+      [op.fromBin]: firebase.firestore.FieldValue.arrayUnion({ code: op.code, name: op.name || '', qty: -op.qty, ts: op.ts, picker: op.picker || 'Unknown', type: 'transfer-out', toBin: op.toBin }),
+      [op.toBin]: firebase.firestore.FieldValue.arrayUnion({ code: op.code, name: op.name || '', qty: op.qty, ts: op.ts, picker: op.picker || 'Unknown', type: 'transfer-in', fromBin: op.fromBin })
+    }
+  }, { merge: true });
+}
+
+function persistTransfer(fromBin, toBin, code, name, qty){
+  const ts = new Date().toISOString();
+  const picker = pickerName || 'Unknown';
+  const outEntry = { code, name: name || '', qty: -qty, ts, picker, type: 'transfer-out', toBin };
+  const inEntry  = { code, name: name || '', qty: qty, ts, picker, type: 'transfer-in', fromBin };
+
+  if(!binLog[fromBin]) binLog[fromBin] = [];
+  binLog[fromBin].push(outEntry);
+  if(!binLog[toBin]) binLog[toBin] = [];
+  binLog[toBin].push(inEntry);
+  saveAllLocal();
+  refreshStats();
+
+  if(!FIREBASE_ENABLED) return;
+  const op = { type: 'transfer', fromBin, toBin, code, name: name || '', qty, ts, picker };
+  if(fbReady && navigator.onLine){
+    applyTransferOp(op).catch(err=>{
+      console.error('Transfer sync failed — queued for retry', err);
+      queueOfflineOp(op);
+    });
+  } else {
+    queueOfflineOp(op);
   }
 }
 
@@ -2078,8 +2149,11 @@ function renderQrTab(){
 /* ---------------- Material log downloads: bin, item, qty, picker, date, time ---------------- */
 function binLogEntryToRow(bin, e){
   const d = new Date(e.ts);
+  let typeLabel = 'Pick';
+  if(e.type === 'transfer-out') typeLabel = 'Transfer Out → ' + (e.toBin || '?');
+  else if(e.type === 'transfer-in') typeLabel = 'Transfer In ← ' + (e.fromBin || '?');
   return [
-    bin, e.code, e.name || '', e.qty, e.picker || 'Unknown',
+    bin, e.code, e.name || '', typeLabel, e.qty, e.picker || 'Unknown',
     isNaN(d) ? '' : d.toLocaleDateString(),
     isNaN(d) ? '' : d.toLocaleTimeString()
   ];
@@ -2089,7 +2163,7 @@ document.getElementById('btnDownloadBinLog').addEventListener('click', ()=>{
   const bin = document.getElementById('binSelectView').value;
   const entries = (bin && binLog[bin]) || [];
   if(!bin || !entries.length){ toast('Nothing logged in this bin yet', 'red'); return; }
-  const headers = ['Bin', 'Item Code', 'Item Name', 'Qty Picked', 'Picked By', 'Date', 'Time'];
+  const headers = ['Bin', 'Item Code', 'Item Name', 'Type', 'Qty', 'By', 'Date', 'Time'];
   const sorted = entries.slice().sort((a, b) => (a.ts < b.ts ? 1 : -1)); // most recent first
   const rows = sorted.map(e => binLogEntryToRow(bin, e));
   const stamp = new Date().toISOString().slice(0,10);
@@ -2100,7 +2174,7 @@ document.getElementById('btnDownloadBinLog').addEventListener('click', ()=>{
 document.getElementById('btnDownloadAllBinLog').addEventListener('click', ()=>{
   const allBins = Object.keys(binLog).filter(b => binLog[b] && binLog[b].length);
   if(!allBins.length){ toast('No material has been logged into any bin yet', 'red'); return; }
-  const headers = ['Bin', 'Item Code', 'Item Name', 'Qty Picked', 'Picked By', 'Date', 'Time'];
+  const headers = ['Bin', 'Item Code', 'Item Name', 'Type', 'Qty', 'By', 'Date', 'Time'];
   const flat = [];
   allBins.forEach(bin => {
     binLog[bin].forEach(e => flat.push({ bin, e }));
@@ -3026,10 +3100,12 @@ function renderBinContents(bin){
   const card = document.getElementById('binContentsCard');
   const downloadRow = document.getElementById('binLogDownloadRow');
   const searchWrap = document.getElementById('binSearchWrap');
+  const transferRow = document.getElementById('binTransferRow');
   if(!bin){
     card.innerHTML = '<p class="hint">Select a bin above to view everything logged inside it.</p>';
     downloadRow.style.display = 'none';
     searchWrap.style.display = 'none';
+    transferRow.style.display = 'none';
     return;
   }
   const entries = binLog[bin] || [];
@@ -3037,6 +3113,7 @@ function renderBinContents(bin){
     card.innerHTML = emptyHtml('📦','Bin is empty', 'No items logged into ' + escapeHtml(bin) + ' yet.');
     downloadRow.style.display = 'none';
     searchWrap.style.display = 'none';
+    transferRow.style.display = 'none';
     return;
   }
   const totalsMap = {};
@@ -3045,11 +3122,14 @@ function renderBinContents(bin){
     totalsMap[e.code].qty += e.qty;
     if(e.name && !totalsMap[e.code].name) totalsMap[e.code].name = e.name;
   });
-  binContentsState = { totals: Object.values(totalsMap), entries: entries.slice().reverse() };
+  // Items fully transferred out (or otherwise net to zero) shouldn't clutter the totals list.
+  const positiveTotals = Object.values(totalsMap).filter(t => t.qty > 0);
+  binContentsState = { totals: positiveTotals, entries: entries.slice().reverse() };
   searchWrap.style.display = 'block';
   document.getElementById('binSearchInput').value = '';
   renderBinContentsFiltered('');
   downloadRow.style.display = 'flex';
+  transferRow.style.display = positiveTotals.length ? 'flex' : 'none';
 }
 
 function renderBinContentsFiltered(term){
@@ -3064,15 +3144,112 @@ function renderBinContentsFiltered(term){
       ).join('')
     : '<p class="hint">No matching items.</p>';
   const logHtml = entries.length
-    ? entries.map(e =>
-        `<div class="bin-entry"><span>${escapeHtml(e.code)}${e.name ? ' <span style="color:var(--ink-dim);">— ' + escapeHtml(e.name) + '</span>' : ''} <span style="color:var(--ink-dim)">×${e.qty}</span></span>` +
-        `<span class="t">${escapeHtml(e.picker || 'Unknown')} · ${new Date(e.ts).toLocaleString()}</span></div>`
-      ).join('')
+    ? entries.map(e => {
+        let subtitle;
+        if(e.type === 'transfer-out'){
+          subtitle = '🔀 ' + escapeHtml(e.picker || 'Unknown') + ' → moved to ' + escapeHtml(e.toBin || '?') + ' · ' + new Date(e.ts).toLocaleString();
+        } else if(e.type === 'transfer-in'){
+          subtitle = '🔀 ' + escapeHtml(e.picker || 'Unknown') + ' → moved from ' + escapeHtml(e.fromBin || '?') + ' · ' + new Date(e.ts).toLocaleString();
+        } else {
+          subtitle = escapeHtml(e.picker || 'Unknown') + ' · ' + new Date(e.ts).toLocaleString();
+        }
+        const qtyLabel = e.qty > 0 ? '×' + e.qty : '×' + Math.abs(e.qty) + ' out';
+        return `<div class="bin-entry"><span>${escapeHtml(e.code)}${e.name ? ' <span style="color:var(--ink-dim);">— ' + escapeHtml(e.name) + '</span>' : ''} <span style="color:var(--ink-dim)">${qtyLabel}</span></span>` +
+        `<span class="t">${subtitle}</span></div>`;
+      }).join('')
     : '<p class="hint">No matching activity.</p>';
   card.innerHTML =
     `<label>Totals in this bin</label>${totalsHtml}` +
     `<label style="margin-top:14px;">Activity log</label>${logHtml}`;
 }
+
+/* ---------------- Transfer material between bins ---------------- */
+document.getElementById('btnOpenTransfer').addEventListener('click', ()=>{
+  if(!pickerName){
+    toast('Set your picker name in Setup first', 'red');
+    document.getElementById('pickerBadge').click();
+    return;
+  }
+  const fromBin = document.getElementById('binSelectView').value;
+  if(!fromBin || !binContentsState.totals.length){ toast('Select a bin with material in it first', 'red'); return; }
+
+  document.getElementById('transferFromBinLabel').textContent = fromBin;
+
+  const itemSel = document.getElementById('transferItemSelect');
+  itemSel.innerHTML = binContentsState.totals
+    .map(t => `<option value="${escapeHtml(t.code)}" data-avail="${t.qty}" data-name="${escapeHtml(t.name || '')}">${escapeHtml(t.code)}${t.name ? ' — ' + escapeHtml(t.name) : ''} (${t.qty} avail.)</option>`)
+    .join('');
+
+  const toSel = document.getElementById('transferToBinSelect');
+  const allBins = Array.from(new Set([...bins, ...Object.keys(binLog)])).filter(b => b !== fromBin);
+  toSel.innerHTML = '<option value="">— choose a bin —</option>' + allBins.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+
+  document.getElementById('transferToBinNewToggle').checked = false;
+  document.getElementById('transferToBinNew').style.display = 'none';
+  document.getElementById('transferToBinNew').value = '';
+  toSel.style.display = '';
+
+  updateTransferAvailability();
+  document.getElementById('sheetTransfer').classList.add('open');
+});
+
+function updateTransferAvailability(){
+  const itemSel = document.getElementById('transferItemSelect');
+  const opt = itemSel.selectedOptions[0];
+  const avail = opt ? parseFloat(opt.dataset.avail) || 0 : 0;
+  document.getElementById('transferAvailLabel').textContent = avail ? ('(' + avail + ' available)') : '';
+  const qtyInput = document.getElementById('transferQtyInput');
+  qtyInput.max = avail;
+  qtyInput.value = Math.min(parseInt(qtyInput.value) || 1, Math.max(avail, 1));
+}
+document.getElementById('transferItemSelect').addEventListener('change', updateTransferAvailability);
+
+document.getElementById('transferQtyMinus').addEventListener('click', ()=>{
+  const inp = document.getElementById('transferQtyInput');
+  inp.value = Math.max(1, (parseInt(inp.value)||1) - 1);
+});
+document.getElementById('transferQtyPlus').addEventListener('click', ()=>{
+  const inp = document.getElementById('transferQtyInput');
+  const max = parseFloat(inp.max) || 999999;
+  inp.value = Math.min(max, (parseInt(inp.value)||1) + 1);
+});
+
+document.getElementById('transferToBinNewToggle').addEventListener('change', (e)=>{
+  const useNew = e.target.checked;
+  document.getElementById('transferToBinSelect').style.display = useNew ? 'none' : '';
+  document.getElementById('transferToBinNew').style.display = useNew ? '' : 'none';
+});
+
+document.getElementById('btnTransferCancel').addEventListener('click', ()=>{
+  document.getElementById('sheetTransfer').classList.remove('open');
+});
+
+document.getElementById('btnTransferConfirm').addEventListener('click', ()=>{
+  const fromBin = document.getElementById('transferFromBinLabel').textContent;
+  const itemSel = document.getElementById('transferItemSelect');
+  const opt = itemSel.selectedOptions[0];
+  if(!opt){ toast('Choose an item to transfer', 'red'); return; }
+  const code = opt.value;
+  const name = opt.dataset.name || '';
+  const avail = parseFloat(opt.dataset.avail) || 0;
+
+  const useNew = document.getElementById('transferToBinNewToggle').checked;
+  const toBin = (useNew ? document.getElementById('transferToBinNew').value : document.getElementById('transferToBinSelect').value).trim();
+  if(!toBin){ toast('Choose or enter a destination bin', 'red'); return; }
+  if(toBin === fromBin){ toast('Destination must be a different bin', 'red'); return; }
+
+  let qty = parseInt(document.getElementById('transferQtyInput').value) || 0;
+  qty = Math.max(1, Math.min(qty, avail));
+  if(qty < 1 || avail <= 0){ toast('Nothing available to transfer', 'red'); return; }
+
+  persistTransfer(fromBin, toBin, code, name, qty);
+  document.getElementById('sheetTransfer').classList.remove('open');
+  renderBinSelect(); // refresh dropdowns/content — a brand-new destination bin now needs to show up too
+  document.getElementById('binSelectView').value = fromBin;
+  renderBinContents(fromBin);
+  toast('Transferred ' + qty + ' × ' + code + ' → ' + toBin, 'green');
+  speak('Transferred ' + qty + ' ' + (name || code) + ' to bin ' + toBin);
+});
 
 document.getElementById('binSearchInput').addEventListener('input', (e)=>{
   renderBinContentsFiltered(e.target.value);
