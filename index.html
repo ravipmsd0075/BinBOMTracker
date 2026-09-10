@@ -2135,15 +2135,27 @@ function printJobSummary(){
   const total = pickList.length;
   const done = pickList.filter(i => i.qtyPicked >= i.qtyReq).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
+  // Which bin(s) each item was actually picked into (ignores transfer entries — those just relocate stock, not "picked").
+  const binsByCode = {};
+  Object.keys(binLog).forEach(bin=>{
+    (binLog[bin] || []).forEach(e=>{
+      if(!e.type){ // plain pick entries have no "type" (transfers are tagged transfer-in/transfer-out)
+        if(!binsByCode[e.code]) binsByCode[e.code] = new Set();
+        binsByCode[e.code].add(bin);
+      }
+    });
+  });
   const rowsHtml = pickList.map(i=>{
     const isDone = i.qtyPicked >= i.qtyReq;
     const isPartial = i.qtyPicked > 0 && !isDone;
     const statusCls = isDone ? 'status-done' : (isPartial ? 'status-partial' : '');
     const status = isDone ? 'Done' : (isPartial ? 'Partial' : 'Pending');
+    const binText = binsByCode[i.code] ? Array.from(binsByCode[i.code]).join(', ') : '';
     return '<tr>' +
       '<td>' + escapeHtml(i.code) + '</td>' +
       '<td>' + escapeHtml(i.name || '') + '</td>' +
       '<td>' + escapeHtml(i.location || '') + '</td>' +
+      '<td>' + escapeHtml(binText) + '</td>' +
       '<td style="text-align:center;">' + i.qtyReq + '</td>' +
       '<td style="text-align:center;">' + i.qtyPicked + '</td>' +
       '<td class="' + statusCls + '">' + status + '</td>' +
@@ -2155,7 +2167,7 @@ function printJobSummary(){
       '<h1>' + escapeHtml(currentBomName) + ' — Pick List Summary</h1>' +
       '<div class="print-summary-meta">Session: ' + escapeHtml(sessionId) + ' &middot; Printed ' + new Date().toLocaleString() + '</div>' +
       '<div class="print-summary-meta">' + done + ' / ' + total + ' items complete (' + pct + '%)</div>' +
-      '<table class="print-table"><thead><tr><th>Code</th><th>Name</th><th>Location</th><th>Req</th><th>Picked</th><th>Status</th></tr></thead>' +
+      '<table class="print-table"><thead><tr><th>Code</th><th>Name</th><th>Location</th><th>Bin Number</th><th>Req</th><th>Picked</th><th>Status</th></tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody></table>' +
     '</div>';
   setTimeout(()=> window.print(), 50);
