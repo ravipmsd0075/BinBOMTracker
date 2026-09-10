@@ -2123,7 +2123,7 @@ function printBinLabel(bin){
       '</div>';
     // Plain bin ID (not JSON) so scanning it still works with the existing
     // "select/activate bin by scan" flows, which expect the raw bin text.
-    QRCode.toCanvas(document.getElementById('printBinQrCanvas'), bin, { width: 220, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+    QRCode.toCanvas(document.getElementById('printBinQrCanvas'), bin, { width: 220, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
       if(err){ toast('Could not generate a QR code for this bin ID', 'red'); return; }
       setTimeout(()=> window.print(), 100); // let the QR canvas paint before the print snapshot is taken
     });
@@ -2221,7 +2221,13 @@ document.getElementById('btnDownloadTemplate').addEventListener('click', ()=>{
 const QR_PAYLOAD_TYPE = 'inventory_item';
 
 function buildQrPayload(code, name, bin){
-  return JSON.stringify({ type: QR_PAYLOAD_TYPE, itemCode: code, itemName: name || '', bin: bin || '' });
+  // Plain item code only — no JSON/name/bin baked in. Name/bin were never
+  // actually read back on scan (handleItemScan only needs the code, then
+  // looks the rest up fresh from the pick list), so embedding them just
+  // bloated the QR with extra data the scanner had to decode, making dense,
+  // slow-to-read codes especially on small/compact labels. A plain code scans
+  // exactly like an existing barcode — same matching path, no changes needed.
+  return code;
 }
 
 // Tries to read a scanned string as an inventory QR label; returns null for
@@ -2422,7 +2428,7 @@ function paintQrCanvas(canvasId, payload, pixelSize){
       toast('QR library failed to load — check your internet connection and reload the page', 'red');
       return;
     }
-    QRCode.toCanvas(el, payload, { width: pixelSize || 200, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+    QRCode.toCanvas(el, payload, { width: pixelSize || 200, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
       if(err) console.error('QR render failed', err);
     });
   });
@@ -2656,7 +2662,7 @@ function printQrLabelSheet(queue){
     const qrPixelSize = qrMmToPx(qrLabelSize.qrSize);
     let painted = 0;
     flatLabels.forEach((e, idx) => {
-      QRCode.toCanvas(document.getElementById('qrPrintCanvas' + idx), buildQrPayload(e.code, e.name, e.bin), { width: qrPixelSize, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
+      QRCode.toCanvas(document.getElementById('qrPrintCanvas' + idx), buildQrPayload(e.code, e.name, e.bin), { width: qrPixelSize, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } }, (err)=>{
         if(err) console.error('QR render failed', err);
         painted++;
         if(painted === flatLabels.length) setTimeout(()=> window.print(), 100);
