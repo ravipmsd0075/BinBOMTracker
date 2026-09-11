@@ -2929,26 +2929,20 @@ window.__libStatus.qrcode = true;
   .remember{ display:flex; align-items:center; gap:8px; margin-top:14px; font-size:12.5px; color:var(--muted); }
   .remember input{ accent-color:var(--amber); }
 
-  /* Label preview card */
+  /* Label preview card — shows the exact same rendered image used for print & download */
   .label-card{
-    background:var(--panel-2); color:var(--text); border-radius:8px; padding:14px;
-    display:flex; gap:12px; align-items:stretch; position:relative;
-    border:1px solid var(--line);
+    background:#fff; border-radius:14px; padding:0; display:flex; justify-content:center;
+    border:1px solid var(--line); overflow:hidden;
   }
-  .label-card::before{
-    content:''; position:absolute; top:0; left:0; width:5px; height:100%;
-    background:var(--amber); border-radius:8px 0 0 8px;
-  }
-  .label-qr{ flex:0 0 96px; display:flex; align-items:center; justify-content:center; }
-  .label-qr canvas{ width:96px !important; height:96px !important; }
-  .label-info{ flex:1; min-width:0; padding-left:4px; }
-  .label-info .l-name{ font-weight:700; font-size:15px; line-height:1.25; word-break:break-word; }
-  .label-info .l-alias{ font-size:12px; color:var(--muted); margin-top:2px; }
-  .label-info .l-loc{
-    display:inline-block; margin-top:8px; font-family:var(--mono); font-weight:600;
-    font-size:14px; background:var(--amber); color:#ffffff; padding:3px 8px; border-radius:6px;
-  }
-  .label-info .l-code{ font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:8px; }
+  .label-card img{ display:block; max-width:100%; height:auto; }
+
+  .size-row{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:14px; }
+  .size-field{ display:flex; flex-direction:column; gap:4px; }
+  .size-field label{ font-size:11.5px; color:var(--muted); }
+  .size-field input{ width:84px; }
+  .size-presets{ display:flex; gap:6px; flex-wrap:wrap; }
+  .size-presets button{ padding:6px 10px; font-size:12px; }
+  .size-presets button.active{ background:var(--amber); border-color:var(--amber); color:#fff; }
 
   .empty-hint{ color:var(--muted); font-size:13px; padding:20px 4px; text-align:center; }
 
@@ -2969,12 +2963,13 @@ window.__libStatus.qrcode = true;
   @media print{
     body *{ visibility:hidden; }
     #printArea, #printArea *{ visibility:visible; }
-    #printArea{ display:block; position:absolute; top:0; left:0; width:100%; }
+    #printArea{ display:block; position:absolute; top:0; left:0; width:100%; margin:0; padding:0; }
     .print-label{
-      width:3.4in; height:1.9in; border:1px dashed #999; margin:0.08in;
-      display:inline-flex; page-break-inside:avoid;
+      page-break-after:always; page-break-inside:avoid;
+      display:flex; justify-content:center; align-items:flex-start; margin:0; padding:0.05in 0;
     }
-    .print-grid{ display:flex; flex-wrap:wrap; }
+    .print-label:last-child{ page-break-after:auto; }
+    .print-label img{ display:block; }
   }
 </style>
 </head>
@@ -3039,7 +3034,29 @@ window.__libStatus.qrcode = true;
   <!-- Preview -->
   <section class="panel">
     <h2><span class="n">02</span>Label preview</h2>
-    <div id="previewWrap">
+
+    <div class="row" style="margin-bottom:4px;">
+      <div>
+        <button type="button" id="orientPortraitBtn" class="primary" style="width:100%;">Portrait</button>
+      </div>
+      <div>
+        <button type="button" id="orientLandscapeBtn" style="width:100%;">Landscape</button>
+      </div>
+    </div>
+
+    <div class="size-row">
+      <div class="size-presets" id="sizePresets"></div>
+      <div class="size-field">
+        <label for="labelWidthIn">Width (in)</label>
+        <input type="number" id="labelWidthIn" min="0.5" max="6" step="0.25" value="1">
+      </div>
+      <div class="size-field">
+        <label for="labelHeightIn">Length (in)</label>
+        <input type="number" id="labelHeightIn" min="1" max="10" step="0.25" value="4">
+      </div>
+    </div>
+
+    <div id="previewWrap" style="margin-top:14px;">
       <div class="empty-hint">Fill item name and location, then generate to preview the label here.</div>
     </div>
     <div class="btnrow">
@@ -3276,29 +3293,95 @@ $('clearBtn').addEventListener('click', () => {
   scanStatus.className = 'scan-status'; scanStatus.textContent = 'Fields cleared.';
 });
 
-async function renderPreview(payload){
-  previewWrap.innerHTML = `
-    <div class="label-card" id="labelCardPreview">
-      <div class="label-qr" id="qrHolder"></div>
-      <div class="label-info">
-        <div class="l-name">${escapeHtml(payload.name)}</div>
-        ${payload.alias ? `<div class="l-alias">${escapeHtml(payload.alias)}</div>` : ''}
-        <div class="l-loc">${escapeHtml(payload.location)}</div>
-        ${payload.code ? `<div class="l-code">${escapeHtml(payload.code)}</div>` : ''}
-      </div>
-    </div>`;
-  const canvas = document.createElement('canvas');
-  $('qrHolder').appendChild(canvas);
+// ---------- Label size + orientation state ----------
+const LS_LABEL_SIZE = 'pmsd_label_size';
+const SIZE_PRESETS = [ { w: 1, h: 4 }, { w: 1, h: 5 }, { w: 2, h: 3 }, { w: 2, h: 4 } ]; // canonical (portrait) w x h
+
+function loadLabelSize(){
   try{
-    await waitForQrLibrary();
-    await QRCode.toCanvas(canvas, JSON.stringify(payload), { width: 96, margin: 0, color:{ dark:'#0e4d5c', light:'#eff4f0' } });
-  }catch(e){
-    $('qrHolder').innerHTML = '<div style="font-size:11px; color:var(--red); text-align:center; line-height:1.3;">QR code failed to load.<br>Check your internet connection and reload the page.</div>';
-  }
+    const s = JSON.parse(localStorage.getItem(LS_LABEL_SIZE));
+    if(s && s.w > 0 && s.h > 0) return { w: s.w, h: s.h, orientation: s.orientation === 'landscape' ? 'landscape' : 'portrait' };
+  }catch(e){}
+  return { w: 1, h: 4, orientation: 'portrait' };
+}
+function saveLabelSize(size){ localStorage.setItem(LS_LABEL_SIZE, JSON.stringify(size)); }
+
+let labelSize = loadLabelSize();
+const labelWidthInEl = $('labelWidthIn'), labelHeightInEl = $('labelHeightIn'), sizePresets = $('sizePresets');
+const orientPortraitBtn = $('orientPortraitBtn'), orientLandscapeBtn = $('orientLandscapeBtn');
+labelWidthInEl.value = labelSize.w;
+labelHeightInEl.value = labelSize.h;
+
+function renderSizePresets(){
+  sizePresets.innerHTML = '';
+  SIZE_PRESETS.forEach(preset => {
+    // Presets are stored canonically as portrait (narrow x long); flip them for landscape (wide x short).
+    const w = labelSize.orientation === 'landscape' ? preset.h : preset.w;
+    const h = labelSize.orientation === 'landscape' ? preset.w : preset.h;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.w = w; btn.dataset.h = h;
+    btn.textContent = `${w} × ${h}"`;
+    sizePresets.appendChild(btn);
+  });
+  markActivePreset();
 }
 
-// Waits briefly for the QR-generation library to finish loading (it loads
-// asynchronously from a CDN). Throws if it never becomes available.
+function markActivePreset(){
+  [...sizePresets.children].forEach(btn => {
+    btn.classList.toggle('active', +btn.dataset.w === labelSize.w && +btn.dataset.h === labelSize.h);
+  });
+}
+
+function updateOrientationButtons(){
+  orientPortraitBtn.className = labelSize.orientation === 'portrait' ? 'primary' : '';
+  orientLandscapeBtn.className = labelSize.orientation === 'landscape' ? 'primary' : '';
+  orientPortraitBtn.style.width = '100%';
+  orientLandscapeBtn.style.width = '100%';
+}
+updateOrientationButtons();
+renderSizePresets();
+
+async function applyLabelSize(newSize){
+  labelSize = newSize;
+  saveLabelSize(labelSize);
+  markActivePreset();
+  if(currentPayload) await renderPreview(currentPayload); // live-update preview if a label is already showing
+}
+
+sizePresets.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const w = +btn.dataset.w, h = +btn.dataset.h;
+  labelWidthInEl.value = w; labelHeightInEl.value = h;
+  applyLabelSize({ w, h, orientation: labelSize.orientation });
+});
+labelWidthInEl.addEventListener('change', () => {
+  const w = Math.min(10, Math.max(0.5, parseFloat(labelWidthInEl.value) || 1));
+  labelWidthInEl.value = w;
+  applyLabelSize({ w, h: labelSize.h, orientation: labelSize.orientation });
+});
+labelHeightInEl.addEventListener('change', () => {
+  const h = Math.min(10, Math.max(0.5, parseFloat(labelHeightInEl.value) || 4));
+  labelHeightInEl.value = h;
+  applyLabelSize({ w: labelSize.w, h, orientation: labelSize.orientation });
+});
+
+function setOrientation(orientation){
+  if(orientation === labelSize.orientation) return;
+  // Rotate the current dimensions to match, like physically turning the label 90°.
+  const w = labelSize.h, h = labelSize.w;
+  labelWidthInEl.value = w; labelHeightInEl.value = h;
+  labelSize = { w, h, orientation };
+  saveLabelSize(labelSize);
+  updateOrientationButtons();
+  renderSizePresets();
+  if(currentPayload) renderPreview(currentPayload);
+}
+orientPortraitBtn.addEventListener('click', () => setOrientation('portrait'));
+orientLandscapeBtn.addEventListener('click', () => setOrientation('landscape'));
+
+// Waits briefly for the QR-generation library to finish loading. Throws if it never becomes available.
 function waitForQrLibrary(timeoutMs = 4000){
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -3308,6 +3391,277 @@ function waitForQrLibrary(timeoutMs = 4000){
       setTimeout(check, 100);
     })();
   });
+}
+
+function roundRectPath(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Breaks a single "word" that's wider than maxWidth all on its own — first by
+// trying hyphen boundaries (keeps codes like RM-S644-B001 readable), then, if a
+// piece is still too wide, by hard character wrap. Without this, an unbroken
+// location/item code with no spaces would silently overflow the label.
+function splitLongToken(ctx, token, maxWidth){
+  if(ctx.measureText(token).width <= maxWidth) return [token];
+  const parts = token.split(/(-)/).filter(p => p !== '');
+  const pieces = [];
+  let cur = '';
+  for(const part of parts){
+    const test = cur + part;
+    if(!cur || ctx.measureText(test).width <= maxWidth){ cur = test; }
+    else { pieces.push(cur); cur = part; }
+  }
+  if(cur) pieces.push(cur);
+
+  const result = [];
+  for(const piece of pieces){
+    if(ctx.measureText(piece).width <= maxWidth){ result.push(piece); continue; }
+    let chunk = '';
+    for(const ch of piece){
+      const test = chunk + ch;
+      if(!chunk || ctx.measureText(test).width <= maxWidth){ chunk = test; }
+      else { result.push(chunk); chunk = ch; }
+    }
+    if(chunk) result.push(chunk);
+  }
+  return result;
+}
+
+function wrapText(ctx, text, maxWidth){
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for(const word of words){
+    const candidate = line ? line + ' ' + word : word;
+    if(ctx.measureText(candidate).width <= maxWidth){
+      line = candidate;
+      continue;
+    }
+    if(line){ lines.push(line); line = ''; }
+    if(ctx.measureText(word).width <= maxWidth){
+      line = word;
+    } else {
+      const subPieces = splitLongToken(ctx, word, maxWidth);
+      subPieces.slice(0, -1).forEach(p => lines.push(p));
+      line = subPieces[subPieces.length - 1] || '';
+    }
+  }
+  if(line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+// The single source of truth for what a label looks like — used identically
+// for the on-screen preview, printing, and PNG download, so all three always match.
+// Portrait: big QR on top, text stacked below. Landscape: big QR on the left,
+// text stacked to the right. Corners are rounded either way.
+async function labelPayloadToCanvas(p, sizeIn){
+  await waitForQrLibrary();
+  const DPI = 300;
+  const orientation = sizeIn.orientation === 'landscape' ? 'landscape' : 'portrait';
+  const W = Math.round(sizeIn.w * DPI);
+  const H = Math.round(sizeIn.h * DPI);
+  const pad = Math.round(0.07 * DPI);
+  const radius = Math.round(0.09 * DPI);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Rounded card background + border (transparent outside the rounded rect)
+  roundRectPath(ctx, 1, 1, W - 2, H - 2, radius);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, Math.round(DPI * 0.008));
+  ctx.strokeStyle = '#c9d6ce';
+  ctx.stroke();
+
+  if(orientation === 'landscape'){
+    // QR fills up to half the label's width (capped by available height); text stacks to the right.
+    const qrSize = Math.min(H - pad * 2, Math.round((W - pad * 3) * 0.5));
+    const qrDataUrl = await QRCode.toDataURL(JSON.stringify(p), { width: qrSize, margin: 1, color:{ dark:'#0e4d5c', light:'#ffffff' } });
+    const qrImg = new Image();
+    await new Promise((resolve, reject) => { qrImg.onload = resolve; qrImg.onerror = reject; qrImg.src = qrDataUrl; });
+    ctx.drawImage(qrImg, pad, (H - qrSize) / 2, qrSize, qrSize);
+
+    const textX = pad * 2 + qrSize;
+    const maxTextWidth = Math.max(30, W - textX - pad);
+    ctx.textAlign = 'left';
+
+    // Measure first at full size, then shrink all text proportionally if it
+    // wouldn't fit within the label's height — guarantees nothing overflows.
+    const baseFonts = { name: DPI * 0.15, alias: DPI * 0.105, loc: DPI * 0.14, code: DPI * 0.09 };
+    function measureLandscape(scale){
+      const nameFontPx = Math.round(baseFonts.name * scale);
+      const aliasFontPx = Math.round(baseFonts.alias * scale);
+      const locFontPx = Math.round(baseFonts.loc * scale);
+      const codeFontPx = Math.round(baseFonts.code * scale);
+
+      ctx.font = `700 ${nameFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+      const nameLines = wrapText(ctx, p.name, maxTextWidth);
+      let aliasLines = [];
+      if(p.alias){
+        ctx.font = `400 ${aliasFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+        aliasLines = wrapText(ctx, p.alias, maxTextWidth);
+      }
+      ctx.font = `700 ${locFontPx}px "IBM Plex Mono", monospace`;
+      const locLines = wrapText(ctx, p.location, maxTextWidth - pad * 0.6);
+      let codeLines = [];
+      if(p.code){
+        ctx.font = `400 ${codeFontPx}px "IBM Plex Mono", monospace`;
+        codeLines = wrapText(ctx, p.code, maxTextWidth);
+      }
+
+      const nameLineH = nameFontPx * 1.15, aliasLineH = aliasFontPx * 1.15,
+            locLineH = locFontPx * 1.2, codeLineH = codeFontPx * 1.2;
+      let total = nameLines.length * nameLineH + pad * 0.25;
+      if(aliasLines.length) total += aliasLines.length * aliasLineH + pad * 0.25;
+      total += pad * 0.2 + (locLines.length * locLineH + pad * 0.4);
+      if(codeLines.length) total += pad * 0.3 + codeLines.length * codeLineH;
+
+      return { nameFontPx, aliasFontPx, locFontPx, codeFontPx, nameLines, aliasLines, locLines, codeLines,
+                nameLineH, aliasLineH, locLineH, codeLineH, total };
+    }
+
+    let layout = measureLandscape(1);
+    const availableH = H - pad * 2;
+    if(layout.total > availableH){
+      const scale = Math.max(0.5, availableH / layout.total);
+      layout = measureLandscape(scale);
+    }
+
+    let y = pad + Math.max(0, (availableH - layout.total) / 2) + layout.nameFontPx * 0.9;
+    ctx.fillStyle = '#0e2a24';
+    ctx.font = `700 ${layout.nameFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+    for(const line of layout.nameLines){
+      ctx.fillText(line, textX, y);
+      y += layout.nameLineH;
+    }
+    y += pad * 0.25;
+
+    if(layout.aliasLines.length){
+      ctx.fillStyle = '#5a6b64';
+      ctx.font = `400 ${layout.aliasFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+      for(const line of layout.aliasLines){
+        y += layout.aliasLineH;
+        ctx.fillText(line, textX, y);
+      }
+      y += pad * 0.25;
+    }
+
+    y += pad * 0.2;
+    ctx.font = `700 ${layout.locFontPx}px "IBM Plex Mono", monospace`;
+    const badgeW = maxTextWidth;
+    const badgeH = layout.locLines.length * layout.locLineH + pad * 0.4;
+    ctx.fillStyle = '#0e4d5c';
+    roundRectPath(ctx, textX, y, badgeW, badgeH, radius * 0.5);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    let ly = y + layout.locLineH * 0.85;
+    for(const line of layout.locLines){
+      ctx.fillText(line, textX + pad * 0.3, ly);
+      ly += layout.locLineH;
+    }
+    y += badgeH + pad * 0.3;
+
+    if(layout.codeLines.length){
+      ctx.fillStyle = '#8a8a8a';
+      ctx.font = `400 ${layout.codeFontPx}px "IBM Plex Mono", monospace`;
+      for(const line of layout.codeLines){
+        y += layout.codeLineH;
+        ctx.fillText(line, textX, y);
+      }
+    }
+
+    ctx.textAlign = 'left';
+    return canvas;
+  }
+
+  // ---- Portrait: QR on top, text centered below ----
+  const qrSize = W - pad * 2;
+  const qrDataUrl = await QRCode.toDataURL(JSON.stringify(p), { width: qrSize, margin: 1, color:{ dark:'#0e4d5c', light:'#ffffff' } });
+  const qrImg = new Image();
+  await new Promise((resolve, reject) => { qrImg.onload = resolve; qrImg.onerror = reject; qrImg.src = qrDataUrl; });
+
+  ctx.textAlign = 'center';
+  let y = pad;
+  ctx.drawImage(qrImg, pad, y, qrSize, qrSize);
+  y += qrSize + pad;
+
+  const maxTextWidth = W - pad * 2;
+
+  // Item name — bold, wraps across multiple lines if the label is narrow
+  const nameFontPx = Math.round(DPI * 0.17);
+  ctx.fillStyle = '#0e2a24';
+  ctx.font = `700 ${nameFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+  for(const line of wrapText(ctx, p.name, maxTextWidth)){
+    y += nameFontPx * 1.12;
+    ctx.fillText(line, W / 2, y);
+  }
+  y += pad * 0.4;
+
+  // Alias — smaller, muted
+  if(p.alias){
+    const aliasFontPx = Math.round(DPI * 0.115);
+    ctx.fillStyle = '#5a6b64';
+    ctx.font = `400 ${aliasFontPx}px "IBM Plex Sans", Arial, sans-serif`;
+    for(const line of wrapText(ctx, p.alias, maxTextWidth)){
+      y += aliasFontPx * 1.2;
+      ctx.fillText(line, W / 2, y);
+    }
+    y += pad * 0.3;
+  }
+
+  // Location — bold, on a solid badge so it reads at a glance
+  y += pad * 0.4;
+  const locFontPx = Math.round(DPI * 0.16);
+  ctx.font = `700 ${locFontPx}px "IBM Plex Mono", monospace`;
+  const locLines = wrapText(ctx, p.location, maxTextWidth - pad * 0.8);
+  const lineH = locFontPx * 1.2;
+  const badgeW = W - pad * 1.4;
+  const badgeH = locLines.length * lineH + pad * 0.5;
+  ctx.fillStyle = '#0e4d5c';
+  roundRectPath(ctx, (W - badgeW) / 2, y, badgeW, badgeH, radius * 0.6);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  let ly = y + lineH * 0.85;
+  for(const line of locLines){
+    ctx.fillText(line, W / 2, ly);
+    ly += lineH;
+  }
+  y += badgeH + pad * 0.5;
+
+  // Item code — small, faint, at the bottom
+  if(p.code){
+    const codeFontPx = Math.round(DPI * 0.095);
+    ctx.fillStyle = '#8a8a8a';
+    ctx.font = `400 ${codeFontPx}px "IBM Plex Mono", monospace`;
+    for(const line of wrapText(ctx, p.code, maxTextWidth)){
+      y += codeFontPx * 1.25;
+      ctx.fillText(line, W / 2, y);
+    }
+  }
+
+  ctx.textAlign = 'left';
+  return canvas;
+}
+
+async function renderPreview(payload){
+  try{
+    const canvas = await labelPayloadToCanvas(payload, labelSize);
+    const dataUrl = canvas.toDataURL('image/png');
+    previewWrap.innerHTML = `
+      <div class="label-card" id="labelCardPreview">
+        <img src="${dataUrl}" style="width:${labelSize.w}in;" alt="Label preview">
+      </div>`;
+  }catch(e){
+    previewWrap.innerHTML = '<div class="empty-hint" style="color:var(--red);">QR code failed to load. Check your internet connection and reload the page.</div>';
+  }
 }
 
 function escapeHtml(s){
@@ -3416,68 +3770,6 @@ $('exportCsvBtn').addEventListener('click', () => {
 
 // ---------- Download-as-image engine (works even where window.print() is unavailable,
 // e.g. inside in-app file viewers/WebViews that don't wire up a print dialog) ----------
-function roundRectPath(ctx, x, y, w, h, r){
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-async function labelPayloadToCanvas(p){
-  await waitForQrLibrary();
-  const qrDataUrl = await QRCode.toDataURL(JSON.stringify(p), { width: 260, margin: 1, color:{ dark:'#0e4d5c', light:'#ffffff' } });
-  const qrImg = new Image();
-  await new Promise((resolve, reject) => { qrImg.onload = resolve; qrImg.onerror = reject; qrImg.src = qrDataUrl; });
-
-  const W = 760, H = 280, pad = 26, qrSize = 230;
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#dbe4de';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, W - 2, H - 2);
-
-  ctx.drawImage(qrImg, pad, (H - qrSize) / 2, qrSize, qrSize);
-
-  const textX = pad + qrSize + 28;
-  let y = 78;
-  ctx.fillStyle = '#0e2a24';
-  ctx.font = '700 30px "IBM Plex Sans", Arial, sans-serif';
-  ctx.fillText(p.name || '', textX, y);
-
-  if(p.alias){
-    y += 32;
-    ctx.fillStyle = '#5a6b64';
-    ctx.font = '400 19px "IBM Plex Sans", Arial, sans-serif';
-    ctx.fillText(p.alias, textX, y);
-  }
-
-  y += 46;
-  ctx.font = '700 26px "IBM Plex Mono", monospace';
-  const locText = p.location || '';
-  const badgeW = ctx.measureText(locText).width + 28, badgeH = 42;
-  ctx.fillStyle = '#0e4d5c';
-  roundRectPath(ctx, textX, y - badgeH + 12, badgeW, badgeH, 6);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(locText, textX + 14, y + 3);
-
-  if(p.code){
-    y += 44;
-    ctx.fillStyle = '#8a8a8a';
-    ctx.font = '400 17px "IBM Plex Mono", monospace';
-    ctx.fillText(p.code, textX, y);
-  }
-
-  return canvas;
-}
-
 function downloadCanvasAsPng(canvas, filename){
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
@@ -3503,7 +3795,7 @@ async function downloadLabels(payloads){
   for(let i = 0; i < payloads.length; i++){
     const p = payloads[i];
     try{
-      const canvas = await labelPayloadToCanvas(p);
+      const canvas = await labelPayloadToCanvas(p, labelSize);
       const safeLoc = String(p.location || 'label').replace(/[^a-z0-9-_]+/gi, '_');
       await downloadCanvasAsPng(canvas, `label_${safeLoc}.png`);
     }catch(e){ console.error('Label image render failed:', e); }
@@ -3520,27 +3812,16 @@ async function printLabels(payloads){
     return;
   }
   const area = $('printArea');
-  area.innerHTML = `<div class="print-grid" id="printGrid"></div>`;
-  const grid = $('printGrid');
+  area.innerHTML = '';
   for(const p of payloads){
+    let canvas;
+    try{
+      canvas = await labelPayloadToCanvas(p, labelSize);
+    }catch(e){ continue; }
     const wrap = document.createElement('div');
     wrap.className = 'print-label';
-    wrap.style.padding = '0.12in';
-    wrap.style.display = 'flex';
-    wrap.style.gap = '0.1in';
-    wrap.style.fontFamily = "'IBM Plex Sans', sans-serif";
-    wrap.innerHTML = `
-      <div class="p-qr" style="flex:0 0 1in;"></div>
-      <div style="flex:1; min-width:0;">
-        <div style="font-weight:700; font-size:13px; line-height:1.2;">${escapeHtml(p.name)}</div>
-        ${p.alias ? `<div style="font-size:10px; color:#555; margin-top:2px;">${escapeHtml(p.alias)}</div>` : ''}
-        <div style="font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; margin-top:6px; background:#0e4d5c; color:#fff; display:inline-block; padding:2px 6px; border-radius:3px;">${escapeHtml(p.location)}</div>
-        ${p.code ? `<div style="font-family:'IBM Plex Mono',monospace; font-size:9px; color:#777; margin-top:6px;">${escapeHtml(p.code)}</div>` : ''}
-      </div>`;
-    grid.appendChild(wrap);
-    const canvas = document.createElement('canvas');
-    wrap.querySelector('.p-qr').appendChild(canvas);
-    await QRCode.toCanvas(canvas, JSON.stringify(p), { width: 90, margin: 0 });
+    wrap.innerHTML = `<img src="${canvas.toDataURL('image/png')}" style="width:${labelSize.w}in;" alt="Label">`;
+    area.appendChild(wrap);
   }
   window.print();
 }
