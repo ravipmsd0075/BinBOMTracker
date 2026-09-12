@@ -2964,11 +2964,10 @@ window.__libStatus.qrcode = true;
     body *{ visibility:hidden; }
     #printArea, #printArea *{ visibility:visible; }
     #printArea{ display:block; position:absolute; top:0; left:0; width:100%; margin:0; padding:0; }
+    #printGrid{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:0.12in; }
     .print-label{
-      page-break-after:always; page-break-inside:avoid;
-      display:flex; justify-content:center; align-items:flex-start; margin:0; padding:0.05in 0;
+      page-break-inside:avoid; margin:0; padding:0;
     }
-    .print-label:last-child{ page-break-after:auto; }
     .print-label img{ display:block; }
   }
 </style>
@@ -3812,7 +3811,8 @@ async function printLabels(payloads){
     return;
   }
   const area = $('printArea');
-  area.innerHTML = '';
+  area.innerHTML = '<div id="printGrid"></div>';
+  const grid = $('printGrid');
   for(const p of payloads){
     let canvas;
     try{
@@ -3821,7 +3821,7 @@ async function printLabels(payloads){
     const wrap = document.createElement('div');
     wrap.className = 'print-label';
     wrap.innerHTML = `<img src="${canvas.toDataURL('image/png')}" style="width:${labelSize.w}in;" alt="Label">`;
-    area.appendChild(wrap);
+    grid.appendChild(wrap);
   }
   window.print();
 }
