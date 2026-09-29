@@ -574,6 +574,7 @@ window.QRCode = {
     display:flex; align-items:center; gap:10px;
   }
   .prow.done{ border-left-color: var(--green); background: linear-gradient(90deg, var(--green-dim), var(--panel) 30%); }
+  .prow .manual-check{ width:18px; height:18px; accent-color: var(--amber); flex-shrink:0; cursor:pointer; }
   .prow.partial{ border-left-color: var(--amber); }
   .prow .info{ flex:1; min-width:0; }
   .prow .code{ font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; }
@@ -941,6 +942,10 @@ window.QRCode = {
       <button class="btn ghost sm" id="btnDownloadList" style="width:100%;">⬇ Download Pick List (.xlsx)</button>
       <button class="btn ghost sm" id="btnPrintJobSummary" style="width:100%;">🖨️ Print Job Summary</button>
     </div>
+    <div class="foot-actions" id="manualPickBarList" style="display:none; margin-bottom:12px;">
+      <button class="btn ghost sm" id="btnManualClearList" style="width:auto;">Clear</button>
+      <button class="btn primary sm" id="btnManualPickList" style="flex:1;">✋ Manually Pick <span id="manualPickCountList">0</span> Selected</button>
+    </div>
     <div class="plist" id="pickListContainer"></div>
   </section>
 
@@ -957,6 +962,10 @@ window.QRCode = {
     </div>
     <div class="foot-actions" style="margin-bottom:12px;">
       <button class="btn ghost sm" id="btnDownloadPending" style="width:100%;">⬇ Download Pending List (.xlsx)</button>
+    </div>
+    <div class="foot-actions" id="manualPickBarPending" style="display:none; margin-bottom:12px;">
+      <button class="btn ghost sm" id="btnManualClearPending" style="width:auto;">Clear</button>
+      <button class="btn primary sm" id="btnManualPickPending" style="flex:1;">✋ Manually Pick <span id="manualPickCountPending">0</span> Selected</button>
     </div>
     <div class="plist" id="pendingContainer"></div>
   </section>
@@ -1233,6 +1242,7 @@ window.QRCode = {
 <!-- Confirm pick sheet -->
 <div class="sheet-backdrop" id="sheetBackdrop">
   <div class="sheet">
+    <div class="hint" id="manualQueueProgress" style="display:none; font-weight:700; color:var(--amber); margin-bottom:6px;"></div>
     <h3 id="sheetItemName">Item name</h3>
     <div class="meta" id="sheetItemMeta">CODE &middot; Required 0 &middot; Picked 0</div>
     <p class="hint" id="overpickWarning" style="display:none; color:var(--red); font-weight:600;"></p>
@@ -1250,6 +1260,7 @@ window.QRCode = {
     </div>
     <div class="foot-actions">
       <button class="btn ghost" id="btnCancelPick">Cancel</button>
+      <button class="btn ghost" id="btnSkipPick" style="display:none;">Skip</button>
       <button class="btn primary" id="btnConfirmPick">Confirm Pick</button>
     </div>
   </div>
@@ -2014,11 +2025,15 @@ function refreshStats(){
 }
 
 /* ---------------- Pick list rendering ---------------- */
+let manualPickSelection = new Set(); // item ids selected for manual (non-scan) picking
+
 function pickRowHtml(item){
   const isDone = item.qtyPicked >= item.qtyReq;
   const isPartial = item.qtyPicked > 0 && !isDone;
   const cls = isDone ? 'done' : (isPartial ? 'partial' : '');
+  const checkboxHtml = isDone ? '' : `<input type="checkbox" class="manual-check" data-id="${escapeHtml(item.id)}" ${manualPickSelection.has(item.id) ? 'checked' : ''}>`;
   return `<div class="prow ${cls}">
+    ${checkboxHtml}
     <div class="info">
       <div class="code">${escapeHtml(item.code)}</div>
       <div class="name">${escapeHtml(item.name || '')}</div>
@@ -2063,6 +2078,7 @@ function renderPickList(){
   if(!pickList.length){
     c.innerHTML = emptyHtml('📋','No pick list loaded','Go to Setup tab and paste your list.');
     refreshStats();
+    updateManualPickBars();
     return;
   }
   const searchEl = document.getElementById('listSearchInput');
@@ -2071,6 +2087,7 @@ function renderPickList(){
   const filtered = filterAndSortItems(pickList, searchEl ? searchEl.value : '', statusEl ? statusEl.value : 'all', sortEl ? sortEl.value : 'default');
   c.innerHTML = filtered.length ? filtered.map(pickRowHtml).join('') : '<p class="hint">No items match this search/filter.</p>';
   refreshStats();
+  updateManualPickBars();
 }
 
 function renderPending(){
@@ -2079,12 +2096,14 @@ function renderPending(){
   document.getElementById('pendingCount').textContent = pending.length + ' remaining';
   if(!pending.length){
     c.innerHTML = emptyHtml('✅','Nothing pending', pickList.length ? 'Every item on the list has been fully picked.' : 'Load a pick list first.');
+    updateManualPickBars();
     return;
   }
   const searchEl = document.getElementById('pendingSearchInput');
   const sortEl = document.getElementById('pendingSortSelect');
   const filtered = filterAndSortItems(pending, searchEl ? searchEl.value : '', 'all', sortEl ? sortEl.value : 'default');
   c.innerHTML = filtered.length ? filtered.map(pickRowHtml).join('') : '<p class="hint">No items match this search.</p>';
+  updateManualPickBars();
 }
 
 document.getElementById('listSearchInput').addEventListener('input', renderPickList);
@@ -3481,6 +3500,10 @@ function handleItemScan(rawCode){
 }
 
 let confirmItem = null;
+let manualPickQueue = null; // null = normal scan flow; array = sequential manual-pick session
+let manualPickQueueIndex = 0;
+let manualPickStats = { picked: 0, skipped: 0 };
+
 function openConfirmSheet(item){
   confirmItem = item;
   document.getElementById('sheetItemName').textContent = item.name || item.code;
@@ -3502,6 +3525,16 @@ function openConfirmSheet(item){
     warning.style.display = 'none';
   }
   updateQtyPresets(remaining);
+  const progress = document.getElementById('manualQueueProgress');
+  const skipBtn = document.getElementById('btnSkipPick');
+  if(manualPickQueue){
+    progress.textContent = 'Manual pick — item ' + (manualPickQueueIndex + 1) + ' of ' + manualPickQueue.length;
+    progress.style.display = 'block';
+    skipBtn.style.display = '';
+  } else {
+    progress.style.display = 'none';
+    skipBtn.style.display = 'none';
+  }
   document.getElementById('sheetBackdrop').classList.add('open');
 }
 
@@ -3541,7 +3574,12 @@ document.getElementById('qtyPresets').addEventListener('click', (e)=>{
 document.getElementById('btnCancelPick').addEventListener('click', ()=>{
   document.getElementById('sheetBackdrop').classList.remove('open');
   confirmItem = null;
-  resumeItemScanner();
+  if(manualPickQueue){
+    toast('Manual pick cancelled — ' + manualPickStats.picked + ' picked before stopping', 'red');
+    endManualPickQueue();
+  } else {
+    resumeItemScanner();
+  }
 });
 
 /* ---------------- Undo last pick ---------------- */
@@ -3585,8 +3623,110 @@ document.getElementById('btnConfirmPick').addEventListener('click', ()=>{
   commitPick(confirmItem, qty);
   document.getElementById('sheetBackdrop').classList.remove('open');
   confirmItem = null;
-  resumeItemScanner();
+  if(manualPickQueue){
+    manualPickStats.picked++;
+    manualPickQueueIndex++;
+    advanceManualPickQueue();
+  } else {
+    resumeItemScanner();
+  }
 });
+
+document.getElementById('btnSkipPick').addEventListener('click', ()=>{
+  if(!manualPickQueue) return;
+  document.getElementById('sheetBackdrop').classList.remove('open');
+  confirmItem = null;
+  manualPickStats.skipped++;
+  manualPickQueueIndex++;
+  advanceManualPickQueue();
+});
+
+/* ---------------- Manual (checkbox-select) picking — no scan required ---------------- */
+function updateManualPickBars(){
+  // drop selections for items that no longer exist or got fully picked elsewhere (scan, undo, import, etc.)
+  const validIds = new Set(pickList.filter(i => i.qtyPicked < i.qtyReq).map(i => i.id));
+  Array.from(manualPickSelection).forEach(id => { if(!validIds.has(id)) manualPickSelection.delete(id); });
+
+  const count = manualPickSelection.size;
+  ['List', 'Pending'].forEach(suffix=>{
+    const bar = document.getElementById('manualPickBar' + suffix);
+    const countEl = document.getElementById('manualPickCount' + suffix);
+    if(!bar) return;
+    bar.style.display = count > 0 ? 'flex' : 'none';
+    if(countEl) countEl.textContent = count;
+  });
+}
+
+function wireManualCheckboxes(containerId){
+  document.getElementById(containerId).addEventListener('change', (e)=>{
+    const cb = e.target.closest('.manual-check');
+    if(!cb) return;
+    const id = cb.dataset.id;
+    if(cb.checked) manualPickSelection.add(id); else manualPickSelection.delete(id);
+    updateManualPickBars();
+  });
+}
+wireManualCheckboxes('pickListContainer');
+wireManualCheckboxes('pendingContainer');
+
+document.getElementById('btnManualClearList').addEventListener('click', ()=>{
+  manualPickSelection.clear();
+  renderPickList();
+});
+document.getElementById('btnManualClearPending').addEventListener('click', ()=>{
+  manualPickSelection.clear();
+  renderPending();
+});
+
+function startManualPickQueue(){
+  if(!pickerName){
+    toast('Set your picker name in Setup first', 'red');
+    document.getElementById('pickerBadge').click();
+    return;
+  }
+  if(!activeBin){
+    toast('Set an active bin first — manual picks are still logged against a bin', 'red');
+    return;
+  }
+  const queue = pickList.filter(i => manualPickSelection.has(i.id) && i.qtyPicked < i.qtyReq);
+  if(!queue.length){ toast('Nothing selected to pick', 'red'); return; }
+  manualPickQueue = queue;
+  manualPickQueueIndex = 0;
+  manualPickStats = { picked: 0, skipped: 0 };
+  stopAllScanners(); // manual picking replaces the camera flow while the queue runs
+  advanceManualPickQueue();
+}
+document.getElementById('btnManualPickList').addEventListener('click', startManualPickQueue);
+document.getElementById('btnManualPickPending').addEventListener('click', startManualPickQueue);
+
+function advanceManualPickQueue(){
+  if(!manualPickQueue) return;
+  if(manualPickQueueIndex >= manualPickQueue.length){
+    const { picked, skipped } = manualPickStats;
+    endManualPickQueue();
+    toast('Manual pick done — ' + picked + ' picked' + (skipped ? ', ' + skipped + ' skipped' : ''), 'green');
+    return;
+  }
+  const nextId = manualPickQueue[manualPickQueueIndex].id;
+  const freshItem = pickList.find(i => i.id === nextId); // re-fetch: qty may have changed since the queue was built
+  if(!freshItem || freshItem.qtyPicked >= freshItem.qtyReq){
+    manualPickQueueIndex++; // already completed elsewhere in the meantime — skip silently
+    advanceManualPickQueue();
+    return;
+  }
+  openConfirmSheet(freshItem);
+}
+
+function endManualPickQueue(){
+  manualPickQueue = null;
+  manualPickQueueIndex = 0;
+  document.getElementById('manualQueueProgress').style.display = 'none';
+  document.getElementById('btnSkipPick').style.display = 'none';
+  manualPickSelection.clear();
+  renderPickList();
+  renderPending();
+}
+
 
 document.getElementById('btnIgnoreScan').addEventListener('click', ()=>{
   document.getElementById('sheetNotFound').classList.remove('open');
