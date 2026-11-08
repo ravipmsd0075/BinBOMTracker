@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>try{if(localStorage.getItem('wms_glass')!=='false')document.documentElement.classList.add('glass');}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PMSD Picking List</title>
 
@@ -826,6 +827,84 @@ window.QRCode = {
   @media print{
     #printArea .qr-sheet{ display:grid; }
   }
+
+  /* ================= Glassmorphism (frosted-glass look) =================
+     CSS translation of the React/framer-motion GlassCard idea: translucent fill,
+     backdrop blur, 1px light border, soft shadow, spring-style enter + hover.
+     Switched on/off with the `glass` class on <html> (Setup > Glass look). */
+  :root, [data-theme="dark"]{
+    --glass-bg: rgba(255,255,255,.07);
+    --glass-bg-strong: rgba(23,31,39,.74);
+    --glass-border: rgba(255,255,255,.16);
+    --glass-shadow: 0 8px 32px rgba(0,0,0,.35);
+    --glass-backdrop:
+      radial-gradient(60% 50% at 12% 8%, rgba(99,102,241,.38), transparent 62%),
+      radial-gradient(50% 45% at 92% 16%, rgba(168,85,247,.30), transparent 62%),
+      radial-gradient(55% 50% at 72% 96%, rgba(236,72,153,.24), transparent 62%);
+  }
+  [data-theme="light"]{
+    --glass-bg: rgba(255,255,255,.55);
+    --glass-bg-strong: rgba(255,255,255,.82);
+    --glass-border: rgba(255,255,255,.75);
+    --glass-shadow: 0 8px 32px rgba(0,82,102,.16);
+    --glass-backdrop:
+      radial-gradient(60% 50% at 12% 8%, rgba(0,82,102,.24), transparent 62%),
+      radial-gradient(50% 45% at 92% 16%, rgba(99,102,241,.20), transparent 62%),
+      radial-gradient(55% 50% at 72% 96%, rgba(236,72,153,.15), transparent 62%);
+  }
+  html.glass body{ background: var(--glass-backdrop), var(--bg); background-attachment: fixed; }
+  html.glass header{
+    background: rgba(var(--bg-rgb), .55);
+    -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  html.glass nav.tabs{
+    background: rgba(var(--bg-rgb), .6);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  html.glass .card, html.glass .active-bin-chip, html.glass .last-pick-bar{
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: var(--glass-shadow);
+  }
+  html.glass .card{ border: 1px solid var(--glass-border); }
+  html.glass .sheet{
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 -8px 40px rgba(0,0,0,.35);
+  }
+  html.glass .sheet-backdrop{ -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+  /* List rows stay translucent but NOT blurred: a 300+ item list of blurred layers is too heavy for warehouse phones. */
+  html.glass .prow{
+    background: var(--glass-bg);
+    border-top-color: var(--glass-border); border-right-color: var(--glass-border); border-bottom-color: var(--glass-border);
+  }
+  html.glass .prow.done{ background: linear-gradient(90deg, var(--green-dim), var(--glass-bg) 35%); }
+
+  @keyframes glassIn{
+    from{ opacity:0; transform: translateY(24px) scale(.96); }
+    to{ opacity:1; transform: none; }
+  }
+  html.glass .view.active .card{ animation: glassIn .55s cubic-bezier(.34,1.4,.64,1) both; }
+  html.glass .view.active .card:nth-child(n+3){ animation-delay: .06s; }
+  html.glass .view.active .card:nth-child(n+5){ animation-delay: .12s; }
+  @media (hover:hover) and (pointer:fine){
+    html.glass .prow{ transition: transform .35s cubic-bezier(.34,1.56,.64,1), box-shadow .3s ease; }
+    html.glass .prow:hover{ transform: translateY(-3px) scale(1.01); box-shadow: var(--glass-shadow); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    html.glass .view.active .card{ animation: none; }
+    html.glass .prow{ transition: none; }
+    html.glass .prow:hover{ transform: none; }
+  }
+  /* Browsers without backdrop-filter: fall back to solid panels so text stays readable. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+    html.glass .card, html.glass .active-bin-chip, html.glass .last-pick-bar, html.glass .sheet{ background: var(--panel); }
+    html.glass header, html.glass nav.tabs{ background: var(--bg); }
+  }
+  @media print{ html.glass body{ background:#fff !important; } }
 </style>
 </head>
 <body>
@@ -1144,6 +1223,7 @@ window.QRCode = {
       <label class="checkline"><input type="checkbox" id="scanFeedbackCheck" checked> Beep + vibrate on every scan</label>
       <label class="checkline"><input type="checkbox" id="voiceEnabledCheck" checked> Voice announcements ("Picked 5 into Bin B-001", "Item not found", "BOM Complete")</label>
       <label class="checkline"><input type="checkbox" id="quickScanCheck"> Quick Scan mode — auto-confirm 1 qty on scan, no popup (best for single-pack picking)</label>
+      <label class="checkline"><input type="checkbox" id="glassEnabledCheck" checked> ✨ Glass (frosted) look — translucent blurred cards</label>
     </div>
 
     <h2 class="section-title">Camera</h2>
@@ -1160,7 +1240,7 @@ window.QRCode = {
     <div class="card">
       <label>Admin PIN (protects "Reset Everything")</label>
       <div class="row">
-        <input type="password" id="adminPinInput" placeholder="Set a PIN" inputmode="numeric" autocomplete="off">
+        <input type="password" id="adminPinInput" placeholder="Set a PIN (6+ characters)" inputmode="numeric" autocomplete="off">
         <button class="btn sm" id="btnSetAdminPin" style="width:auto;">Save</button>
       </div>
       <p class="hint" id="adminPinStatus">No PIN set — anyone can currently reset everything. Set one so only admins can wipe data.</p>
@@ -1387,11 +1467,43 @@ const DEFAULT_BINS = [
   "RM-SDB-B029","RM-SDB-B030"
 ];
 
+/* ---------------- Security / input-safety helpers ---------------- */
+const MAX_CODE_LEN = 120, MAX_NAME_LEN = 200, MAX_BIN_LEN = 60, MAX_LABEL_LEN = 80;
+const PIN_PBKDF2_ITER = 150000;
+// Names that exist on every plain object ("constructor", "__proto__", "toString"...) must never be
+// used as dictionary keys for user-supplied text (bin IDs, item codes, BOM/picker names): they collide
+// with inherited properties and crash or silently corrupt lookups. Also rejects empty/non-string input.
+function isUnsafeKey(s){ return typeof s !== 'string' || s === '' || (s in Object.prototype); }
+function cleanText(s, max){ return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max); }
+function cleanQty(v){ const n = parseFloat(v); return (isFinite(n) && n > 0) ? Math.min(n, 1000000) : 1; }
+function cleanSessionId(s){ return String(s == null ? '' : s).trim().replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 64); }
+function hasOwn(obj, key){ return Object.prototype.hasOwnProperty.call(obj, key); }
+function timingSafeEqual(a, b){
+  a = String(a); b = String(b);
+  if(a.length !== b.length) return false;
+  let diff = 0;
+  for(let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function pbkdf2Hex(pin, salt, iterations){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations }, keyMaterial, 256);
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 let pickList = LS.get('wms_pick_list', []);
 let bins = LS.get('wms_bins', DEFAULT_BINS);
 let binLog = LS.get('wms_bin_log', {});
 let activeBin = LS.get('wms_active_bin', null);
-let sessionId = LS.get('wms_session_id', 'default');
+let sessionId = LS.get('wms_session_id', null);
+if(!sessionId){
+  // Fresh install: don't drop everyone into one shared, guessable "default" session.
+  // If local pick data already exists the device was implicitly on "default", so keep that.
+  const hadLocalData = (LS.get('wms_pick_list', []) || []).length > 0;
+  sessionId = hadLocalData ? 'default' : 'session-' + randomHex(6);
+  LS.set('wms_session_id', sessionId);
+}
 let pickerName = LS.get('wms_picker_name', '');
 let overpickEnabled = LS.get('wms_overpick_enabled', false);
 
@@ -1505,13 +1617,14 @@ function closeNewBomSheet(){
 }
 document.getElementById('btnNewBomCancel').addEventListener('click', closeNewBomSheet);
 document.getElementById('btnNewBomCreate').addEventListener('click', ()=>{
-  const name = document.getElementById('newBomNameInput').value.trim();
+  const name = cleanText(document.getElementById('newBomNameInput').value, MAX_LABEL_LEN);
   if(!name){ toast('Enter a BOM name', 'red'); return; }
+  if(isUnsafeKey(name)){ toast('That BOM name is reserved — pick another', 'red'); return; }
   if(savedBoms[name] || name === currentBomName){
     toast('A BOM named "' + name + '" already exists — use Switch instead', 'red');
     return;
   }
-  const sessionInput = document.getElementById('newBomSessionInput').value.trim();
+  const sessionInput = cleanSessionId(document.getElementById('newBomSessionInput').value);
   const chosenSessionId = sessionInput || genSessionId(name);
   const cb = newBomCallback;
   closeNewBomSheet();
@@ -1675,7 +1788,7 @@ function attachFirestoreListener(){
 }
 
 document.getElementById('btnSetSession').addEventListener('click', ()=>{
-  const val = document.getElementById('sessionIdInput').value.trim();
+  const val = cleanSessionId(document.getElementById('sessionIdInput').value);
   if(!val){ toast('Enter a session ID', 'red'); return; }
   if(val === sessionId){ toast('Already on session "' + val + '"', 'red'); return; }
   if(!FIREBASE_ENABLED || !fbReady){
@@ -1779,7 +1892,7 @@ function applyPickTransaction(op){
     const applyQty = overpickEnabled ? Math.max(0, op.qty) : Math.max(0, Math.min(op.qty, remaining));
     list[idx] = { ...list[idx], qtyPicked: list[idx].qtyPicked + applyQty };
     const log = data.binLog || {};
-    if(!log[op.bin]) log[op.bin] = [];
+    if(!hasOwn(log, op.bin)) log[op.bin] = [];
     log[op.bin] = [...log[op.bin], logEntry];
     tx.set(ref, { pickList: list, binLog: log, bins: data.bins || DEFAULT_BINS }, { merge: true });
   }));
@@ -1848,7 +1961,7 @@ function persistPick(id, code, qty, bin, itemNameForLog, ts){
     const applyQty = overpickEnabled ? Math.max(0, qty) : Math.max(0, Math.min(qty, remaining));
     item.qtyPicked += applyQty;
   }
-  if(!binLog[bin]) binLog[bin] = [];
+  if(!hasOwn(binLog, bin)) binLog[bin] = [];
   binLog[bin].push(logEntry);
   saveAllLocal();
   renderCurrentView();
@@ -1898,7 +2011,7 @@ function persistBinOnlyLog(bin, code, name, qty){
       binLog: { [bin]: firebase.firestore.FieldValue.arrayUnion(logEntry) }
     }, { merge: true }).catch(err=>{ toast('Sync failed', 'red'); console.error(err); });
   } else {
-    if(!binLog[bin]) binLog[bin] = [];
+    if(!hasOwn(binLog, bin)) binLog[bin] = [];
     binLog[bin].push(logEntry);
     saveAllLocal();
     refreshStats();
@@ -1925,9 +2038,9 @@ function persistTransfer(fromBin, toBin, code, name, qty){
   const outEntry = { code, name: name || '', qty: -qty, ts, picker, type: 'transfer-out', toBin };
   const inEntry  = { code, name: name || '', qty: qty, ts, picker, type: 'transfer-in', fromBin };
 
-  if(!binLog[fromBin]) binLog[fromBin] = [];
+  if(!hasOwn(binLog, fromBin)) binLog[fromBin] = [];
   binLog[fromBin].push(outEntry);
-  if(!binLog[toBin]) binLog[toBin] = [];
+  if(!hasOwn(binLog, toBin)) binLog[toBin] = [];
   binLog[toBin].push(inEntry);
   saveAllLocal();
   refreshStats();
@@ -2155,7 +2268,7 @@ function printJobSummary(){
   const done = pickList.filter(i => i.qtyPicked >= i.qtyReq).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   // Which bin(s) each item was actually picked into (ignores transfer entries — those just relocate stock, not "picked").
-  const binsByCode = {};
+  const binsByCode = Object.create(null);
   Object.keys(binLog).forEach(bin=>{
     (binLog[bin] || []).forEach(e=>{
       if(!e.type){ // plain pick entries have no "type" (transfers are tagged transfer-in/transfer-out)
@@ -2255,7 +2368,7 @@ function parseInventoryQr(text){
   if(!text || text[0] !== '{') return null;
   try{
     const obj = JSON.parse(text);
-    if(obj && obj.type === QR_PAYLOAD_TYPE && obj.itemCode) return obj;
+    if(obj && obj.type === QR_PAYLOAD_TYPE && typeof obj.itemCode === 'string' && obj.itemCode) return obj;
   }catch(e){ /* not JSON — treat as a normal scanned code */ }
   return null;
 }
@@ -2499,7 +2612,7 @@ document.getElementById('btnQrClear').addEventListener('click', ()=>{
 });
 
 /* ---- Bulk ---- */
-let qrBulkCopies = {}; // code -> copies, remembered across re-renders/filtering
+let qrBulkCopies = Object.create(null); // code -> copies, remembered across re-renders/filtering
 function renderQrBulkList(){
   const items = qrItemMasterList();
   const emptyHint = document.getElementById('qrBulkEmptyHint');
@@ -2550,7 +2663,7 @@ document.getElementById('btnQrBulkSelectAll').addEventListener('click', ()=>{
   renderQrBulkList();
 });
 document.getElementById('btnQrBulkSelectNone').addEventListener('click', ()=>{
-  qrBulkCopies = {};
+  qrBulkCopies = Object.create(null);
   renderQrBulkList();
 });
 
@@ -2781,7 +2894,7 @@ function genId(){
 // Find codes that are shared by two or more items that are actually different
 // (different names). Same code + same name is fine (that's just a qty top-up).
 function findDuplicateCodeConflicts(list){
-  const byCode = {};
+  const byCode = Object.create(null);
   (list || []).forEach(item => {
     if(!item || !item.code) return;
     const key = item.code.toLowerCase();
@@ -2886,8 +2999,9 @@ document.getElementById('btnNewBom').addEventListener('click', ()=>{
 });
 
 document.getElementById('btnRenameBom').addEventListener('click', ()=>{
-  const newName = document.getElementById('currentBomNameInput').value.trim();
+  const newName = cleanText(document.getElementById('currentBomNameInput').value, MAX_LABEL_LEN);
   if(!newName){ toast('Enter a name first', 'red'); return; }
+  if(isUnsafeKey(newName)){ toast('That BOM name is reserved — pick another', 'red'); return; }
   if(newName === currentBomName) return;
   if(savedBoms[newName]){ toast('That name is already used by another saved BOM', 'red'); return; }
   if(currentBomName && savedBoms[currentBomName]){
@@ -2910,12 +3024,14 @@ document.getElementById('savedBomsList').addEventListener('click', (e)=>{
 
 document.getElementById('btnSetAdminPin').addEventListener('click', async ()=>{
   const val = document.getElementById('adminPinInput').value.trim();
-  if(!val || val.length < 4){ toast('Use a PIN of at least 4 digits', 'red'); return; }
+  if(val.length < 6){ toast('Use a PIN/passcode of at least 6 characters', 'red'); return; }
   const salt = randomHex(16);
-  const hash = await hashPin(val, salt);
+  let hash = null;
+  try{ hash = await pbkdf2Hex(val, salt, PIN_PBKDF2_ITER); }catch(e){ console.error(e); }
   if(!hash){ toast('Could not hash PIN — this page needs HTTPS for secure storage', 'red'); return; }
-  adminPinHash = { salt, hash };
+  adminPinHash = { salt, hash, algo: 'pbkdf2', iter: PIN_PBKDF2_ITER };
   LS.set('wms_admin_pin_hash', adminPinHash);
+  LS.set('wms_pin_fail', { count: 0, lockUntil: 0 });
   document.getElementById('adminPinInput').value = '';
   toast('Admin PIN saved (stored as a salted hash)', 'green');
   renderSetup();
@@ -2950,7 +3066,7 @@ document.getElementById('pickerBadge').addEventListener('click', ()=>{
 });
 
 document.getElementById('btnSetPicker').addEventListener('click', ()=>{
-  const val = document.getElementById('pickerNameInput').value.trim();
+  const val = cleanText(document.getElementById('pickerNameInput').value, 40);
   if(!val){ toast('Enter a name first', 'red'); return; }
   pickerName = val;
   LS.set('wms_picker_name', pickerName);
@@ -3090,12 +3206,12 @@ document.getElementById('btnImportList').addEventListener('click', ()=>{
   const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
   const parsed = lines.map(line=>{
     const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-    const code = (parts[0]||'').trim();
-    const name = (parts[1]||'').trim();
-    const qty = parseFloat((parts[2]||'1').trim()) || 1;
-    const location = (parts[3]||'').trim();
+    const code = cleanText(parts[0], MAX_CODE_LEN);
+    const name = cleanText(parts[1], MAX_NAME_LEN);
+    const qty = cleanQty(parts[2]);
+    const location = cleanText(parts[3], MAX_BIN_LEN);
     return { id: genId(), code, name, qtyReq: qty, qtyPicked: 0, location };
-  }).filter(i=>i.code);
+  }).filter(i=>i.code && !isUnsafeKey(i.code));
   if(!parsed.length){ toast('Could not read any rows', 'red'); return; }
   const merging = document.getElementById('pasteMergeCheck').checked;
   if(merging){
@@ -3130,11 +3246,11 @@ document.getElementById('excelFileInput').addEventListener('change', (e)=>{
       const parsed = [];
       for(let i = startRow; i < rows.length; i++){
         const r = rows[i];
-        const code = String(r[0] ?? '').trim();
-        const name = String(r[1] ?? '').trim();
-        const qty = parseFloat(r[2]) || 0;
-        const location = String(r[3] ?? '').trim();
-        if(!code) continue;
+        const code = cleanText(r[0], MAX_CODE_LEN);
+        const name = cleanText(r[1], MAX_NAME_LEN);
+        const qty = cleanQty(r[2]);
+        const location = cleanText(r[3], MAX_BIN_LEN);
+        if(!code || isUnsafeKey(code)) continue;
         parsed.push({ id: genId(), code, name, qtyReq: qty || 1, qtyPicked: 0, location });
       }
       if(!parsed.length){
@@ -3171,16 +3287,23 @@ document.getElementById('btnClearList').addEventListener('click', ()=>{
 
 document.getElementById('btnSaveBins').addEventListener('click', ()=>{
   const raw = document.getElementById('binListInput').value.trim();
-  const newBins = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const newBins = Array.from(new Set(raw.split('\n').map(l=>cleanText(l, MAX_BIN_LEN)).filter(l=>l && !isUnsafeKey(l))));
   persistBulk({ bins: newBins });
   toast(newBins.length + ' bins saved', 'green');
 });
+
+// Quote every cell and neutralise leading = + - @ so Excel/Sheets never treats imported text as a formula.
+function csvCell(v){
+  let s = String(v == null ? '' : v);
+  if(/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
 
 document.getElementById('btnExportCsv').addEventListener('click', ()=>{
   if(!pickList.length){ toast('Nothing to export', 'red'); return; }
   let csv = 'Item Code,Item Name,Qty Required,Qty Picked,Status\n';
   pickList.forEach(i=>{
-    csv += `${i.code},"${(i.name||'').replace(/"/g,'""')}",${i.qtyReq},${i.qtyPicked},${i.qtyPicked>=i.qtyReq?'Done':'Pending'}\n`;
+    csv += [i.code, i.name || '', i.qtyReq, i.qtyPicked, i.qtyPicked >= i.qtyReq ? 'Done' : 'Pending'].map(csvCell).join(',') + '\n';
   });
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
@@ -3211,9 +3334,35 @@ document.getElementById('btnAdminConfirmCancel').addEventListener('click', ()=>{
 document.getElementById('btnAdminConfirmAllow').addEventListener('click', async ()=>{
   const entered = document.getElementById('adminConfirmPinInput').value.trim();
   if(!adminPinHash){ toast('No admin PIN configured', 'red'); return; }
-  const enteredHash = await hashPin(entered, adminPinHash.salt);
-  if(!enteredHash || enteredHash !== adminPinHash.hash){
-    toast('Incorrect PIN — reset not allowed', 'red');
+  const lockState = LS.get('wms_pin_fail', { count: 0, lockUntil: 0 });
+  if(lockState.lockUntil && Date.now() < lockState.lockUntil){
+    toast('Too many wrong attempts — try again in ' + Math.ceil((lockState.lockUntil - Date.now()) / 1000) + 's', 'red');
+    document.getElementById('adminConfirmPinInput').value = '';
+    return;
+  }
+  let enteredHash = null;
+  try{
+    enteredHash = (adminPinHash.algo === 'pbkdf2')
+      ? await pbkdf2Hex(entered, adminPinHash.salt, adminPinHash.iter || PIN_PBKDF2_ITER)
+      : await hashPin(entered, adminPinHash.salt); // legacy single-round SHA-256 record
+  }catch(e){ console.error(e); }
+  const pinOk = !!enteredHash && timingSafeEqual(enteredHash, adminPinHash.hash);
+  if(pinOk){
+    LS.set('wms_pin_fail', { count: 0, lockUntil: 0 });
+    if(adminPinHash.algo !== 'pbkdf2'){ // upgrade an old SHA-256 record while we hold the plaintext PIN
+      try{
+        const newSalt = randomHex(16);
+        const newHash = await pbkdf2Hex(entered, newSalt, PIN_PBKDF2_ITER);
+        adminPinHash = { salt: newSalt, hash: newHash, algo: 'pbkdf2', iter: PIN_PBKDF2_ITER };
+        LS.set('wms_admin_pin_hash', adminPinHash);
+      }catch(e){ console.error(e); }
+    }
+  }
+  if(!pinOk){
+    const failCount = (lockState.count || 0) + 1;
+    const lockUntil = failCount >= 5 ? Date.now() + Math.min(15 * 60 * 1000, 30000 * Math.pow(2, failCount - 5)) : 0;
+    LS.set('wms_pin_fail', { count: failCount, lockUntil });
+    toast(lockUntil ? 'Too many wrong attempts — locked for a while' : 'Incorrect PIN — reset not allowed', 'red');
     document.getElementById('adminConfirmPinInput').value = '';
     return;
   }
@@ -3234,6 +3383,10 @@ document.getElementById('btnAdminConfirmAllow').addEventListener('click', async 
 
 /* ---------------- Active bin ---------------- */
 function setActiveBin(bin){
+  if(bin){
+    bin = cleanText(bin, MAX_BIN_LEN);
+    if(isUnsafeKey(bin)){ toast('Invalid bin ID', 'red'); bin = null; }
+  }
   activeBin = bin;
   LS.set('wms_active_bin', activeBin);
   document.getElementById('activeBinLabel').textContent = bin || 'Not set';
@@ -3459,6 +3612,24 @@ function findPickListItem(scanned){
 }
 
 function handleItemScan(rawCode){
+  // Any exception here used to leave the camera paused forever (itemScanBusy stuck true).
+  try{
+    handleItemScanInner(rawCode);
+  }catch(err){
+    console.error('Scan handling failed', err);
+    toast('Could not process that scan', 'red');
+    scanFeedback('warn');
+    resumeItemScanner();
+  }
+}
+
+function handleItemScanInner(rawCode){
+  if(typeof rawCode !== 'string' || rawCode.length > 2000){
+    toast('Scanned data is too long to be an item code — ignored', 'red');
+    scanFeedback('warn');
+    resumeItemScanner();
+    return;
+  }
   // QR Label Maker labels encode structured JSON — unwrap it to the item code
   // transparently so scanning one works exactly like scanning a plain barcode.
   const inventoryQr = parseInventoryQr(rawCode);
@@ -3735,8 +3906,16 @@ document.getElementById('btnIgnoreScan').addEventListener('click', ()=>{
 });
 document.getElementById('btnLogAnyway').addEventListener('click', ()=>{
   if(!pendingScanCode) return;
-  persistBinOnlyLog(activeBin, pendingScanCode, '(not on pick list)', 1);
-  toast('Logged ' + pendingScanCode + ' to ' + activeBin, 'green');
+  const safeCode = cleanText(pendingScanCode, MAX_CODE_LEN);
+  if(isUnsafeKey(safeCode)){
+    toast('That scanned text is not a valid item code — not logged', 'red');
+    document.getElementById('sheetNotFound').classList.remove('open');
+    pendingScanCode = null;
+    resumeItemScanner();
+    return;
+  }
+  persistBinOnlyLog(activeBin, safeCode, '(not on pick list)', 1);
+  toast('Logged ' + safeCode + ' to ' + activeBin, 'green');
   document.getElementById('sheetNotFound').classList.remove('open');
   pendingScanCode = null;
   resumeItemScanner();
@@ -3786,7 +3965,7 @@ function renderBinContents(bin){
     transferRow.style.display = 'none';
     return;
   }
-  const totalsMap = {};
+  const totalsMap = Object.create(null);
   entries.forEach(e=>{
     if(!totalsMap[e.code]) totalsMap[e.code] = { code: e.code, name: e.name || '', qty: 0 };
     totalsMap[e.code].qty += e.qty;
@@ -3906,6 +4085,7 @@ document.getElementById('btnTransferConfirm').addEventListener('click', ()=>{
   const useNew = document.getElementById('transferToBinNewToggle').checked;
   const toBin = (useNew ? document.getElementById('transferToBinNew').value : document.getElementById('transferToBinSelect').value).trim();
   if(!toBin){ toast('Choose or enter a destination bin', 'red'); return; }
+  if(isUnsafeKey(toBin) || toBin.length > MAX_BIN_LEN){ toast('Invalid destination bin ID', 'red'); return; }
   if(toBin === fromBin){ toast('Destination must be a different bin', 'red'); return; }
 
   let qty = parseInt(document.getElementById('transferQtyInput').value) || 0;
@@ -3929,7 +4109,7 @@ document.getElementById('binSearchInput').addEventListener('input', (e)=>{
 function renderPickerSummary(){
   const card = document.getElementById('pickerSummaryCard');
   if(!card) return;
-  const totals = {}; // picker -> { qty, items: Set, picks: count }
+  const totals = Object.create(null); // picker -> { qty, items: Set, picks: count }
   Object.values(binLog).forEach(entries=>{
     (entries||[]).forEach(e=>{
       const p = e.picker || 'Unknown';
@@ -3968,6 +4148,23 @@ if('serviceWorker' in navigator){
     });
   });
 }
+
+/* ---------------- Glass (frosted) look toggle ---------------- */
+function applyGlass(on){ document.documentElement.classList.toggle('glass', !!on); }
+(function(){
+  let glassOn = LS.get('wms_glass', true);
+  applyGlass(glassOn);
+  const cb = document.getElementById('glassEnabledCheck');
+  if(cb){
+    cb.checked = glassOn;
+    cb.addEventListener('change', (e)=>{
+      glassOn = e.target.checked;
+      LS.set('wms_glass', glassOn);
+      applyGlass(glassOn);
+      toast(glassOn ? 'Glass look on' : 'Glass look off', glassOn ? 'green' : 'red');
+    });
+  }
+})();
 </script>
 </body>
 </html>
