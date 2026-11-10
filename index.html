@@ -905,6 +905,38 @@ window.QRCode = {
     html.glass header, html.glass nav.tabs{ background: var(--bg); }
   }
   @media print{ html.glass body{ background:#fff !important; } }
+
+  /* ===== Day (light) theme: higher contrast & clearer card separation (dark theme untouched) ===== */
+  [data-theme="light"]{
+    --bg: #d3e0da;
+    --bg-rgb: 211,224,218;
+    --panel: #ffffff;
+    --panel-2: #e3ece8;
+    --line: #8fa89f;
+    --ink: #082228;
+    --ink-dim: #2f4a54;
+    --amber: #005266;
+    --amber-dim: #c2dfe6;
+    --green: #166534;
+    --green-dim: #cdebd6;
+    --red: #991b1b;
+    --red-dim: #f6cfcb;
+    --glass-bg: rgba(255,255,255,.86);
+    --glass-bg-strong: rgba(255,255,255,.95);
+    --glass-border: rgba(0,82,102,.30);
+    --glass-shadow: 0 6px 22px rgba(0,60,80,.18), 0 1px 3px rgba(0,60,80,.14);
+    --glass-backdrop:
+      radial-gradient(60% 50% at 12% 8%, rgba(0,82,102,.30), transparent 62%),
+      radial-gradient(50% 45% at 92% 16%, rgba(99,102,241,.22), transparent 62%),
+      radial-gradient(55% 50% at 72% 96%, rgba(236,72,153,.16), transparent 62%);
+  }
+  html[data-theme="light"].glass header{ background: rgba(var(--bg-rgb), .86); }
+  html[data-theme="light"].glass nav.tabs{ background: rgba(var(--bg-rgb), .88); }
+  [data-theme="light"] .card{ box-shadow: 0 1px 3px rgba(0,60,80,.14); }
+  [data-theme="light"] .prow{ box-shadow: 0 1px 3px rgba(0,60,80,.12); }
+  [data-theme="light"] nav.tabs button:not(.active){ background: rgba(255,255,255,.78); color: var(--ink); border-color: var(--line); }
+  [data-theme="light"] label:not(.checkline){ font-weight: 700; }
+  [data-theme="light"] ::placeholder{ color: #5a7580; opacity: 1; }
 </style>
 </head>
 <body>
